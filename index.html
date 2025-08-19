@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <title>Cricket Scorecard Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Cricket Scorecard Generator</h1>
+    </header>
+    <main>
+        <div class="setup-container">
+            <h2>Match Setup</h2>
+            <form id="match-setup-form">
+                <div class="form-group">
+                    <label for="num-players">Number of Players per Team:</label>
+                    <input type="number" id="num-players" name="num-players" min="1" max="20" required>
+                </div>
+                <div class="form-group">
+                    <label for="num-overs">Number of Overs:</label>
+                    <input type="number" id="num-overs" name="num-overs" min="1" max="100" required>
+                </div>
+                <div class="form-group">
+                    <label for="batting-first">Team to Bat First:</label>
+                    <select id="batting-first" name="batting-first">
+                        <option value="Team A">Team A</option>
+                        <option value="Team B">Team B</option>
+                    </select>
+                </div>
+                <button type="submit">Set Up Teams</button>
+            </form>
+        </div>
+
+        <div id="player-lists-wrapper" class="hidden">
+            <!-- Player name entry tables will be generated here -->
+        </div>
+
+        <div id="start-match-container" class="hidden">
+            <button type="button" id="start-match-btn">Start 1st Innings</button>
+        </div>
+
+        <div id="first-innings-summary" class="hidden">
+            <!-- 1st innings summary will be generated here -->
+        </div>
+
+        <div id="scorecards-wrapper" class="hidden">
+            <!-- Team scorecards will be generated here by JavaScript -->
+        </div>
+
+        <div id="second-innings-container" class="hidden">
+            <button type="button" id="start-second-innings-btn">Start 2nd Innings</button>
+        </div>
+
+        <div id="match-summary-container" class="hidden">
+            <!-- Final match summary will be generated here -->
+        </div>
+    </main>
+    <script src="script.js"></script>
+    <script>
+        // Register the service worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('ServiceWorker registration successful with scope: ', registration.scope))
+                    .catch(err => console.log('ServiceWorker registration failed: ', err));
+            });
+        }
+    </script>
+</body>
+</html>

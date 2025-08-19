@@ -1,0 +1,280 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f4f7f6;
+    color: #333;
+    line-height: 1.6;
+    margin: 0;
+    padding: 20px;
+}
+
+header {
+    background: #005a9c;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+    margin-bottom: 20px;
+    border-radius: 8px;
+}
+
+main {
+    max-width: 1200px;
+    margin: auto;
+    overflow: hidden;
+    padding: 0 20px;
+}
+
+.setup-container {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background: #218838;
+}
+
+.hidden {
+    display: none;
+}
+
+#start-match-container {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+#start-match-btn {
+    width: auto;
+    padding: 12px 30px;
+}
+
+#first-innings-summary {
+    /* This container now holds the full scorecards, so it needs less specific styling */
+    margin-bottom: 20px;
+    border-bottom: 2px solid #005a9c;
+    padding-bottom: 20px;
+}
+
+.target-display {
+    background: #fff3cd;
+    color: #856404;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+    font-weight: bold;
+}
+
+#second-innings-container {
+    text-align: center;
+    margin-top: 20px;
+    margin-bottom: 30px;
+}
+
+#match-summary-container {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    margin-top: 30px;
+    border-left: 5px solid #28a745;
+}
+
+#match-summary-container h2 {
+    margin-top: 0;
+    border-bottom: none;
+}
+
+#match-summary-container h3 {
+    color: #28a745;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#match-summary-container h4 {
+    color: #005a9c;
+}
+
+#match-summary-container p {
+    font-size: 1.1em;
+}
+
+#scorecards-wrapper,
+#player-lists-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    align-items: start; /* Aligns items to the top */
+    margin-bottom: 30px;
+}
+
+#scorecards-wrapper {
+    grid-template-columns: 1fr; /* Override for single column layout */
+}
+
+.team-section {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.scorecard-box {
+    overflow-x: auto; /* Allows tables to scroll horizontally on smaller screens */
+}
+
+.scorecard-box h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+h2 {
+    color: #005a9c;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    padding: 8px; /* Further reduced padding for a more compact view */
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+thead {
+    background-color: #e9ecef;
+}
+
+th {
+    font-weight: bold;
+}
+
+tfoot {
+    background-color: #e9ecef;
+    font-weight: bold;
+    border-top: 2px solid #ccc;
+}
+
+.total-label {
+    text-align: right !important; /* Ensure alignment is correct */
+}
+
+.grand-total, .over-runs, .over-wickets, .over-extras {
+    font-weight: bold;
+    text-align: center !important;
+}
+
+.on-strike-cell {
+    text-align: center;
+}
+
+.on-strike-radio {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+.bowler-column {
+    width: 25%; /* Give the bowler column more space */
+    min-width: 120px; /* Ensure it doesn't get too small */
+}
+
+.ball-cell {
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+}
+
+.player-name-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #ccc; /* Make it look like a standard input */
+    border-radius: 4px;
+    background-color: #fff;
+    padding: 5px;
+    margin: 0;
+    font: inherit; /* Uses the table's font styles */
+    color: inherit;
+}
+
+.player-name-input:focus {
+    outline: none;
+    border: 1px solid #005a9c;
+    background-color: #f8f9fa; /* Keep the focus style */
+}
+
+.bowler-select {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font: inherit;
+    color: inherit;
+    background-color: #fff;
+}
+
+.bowler-select:focus {
+    outline: none;
+    border-color: #005a9c;
+}
+
+/* Style for the individual ball select dropdowns */
+.ball-select {
+    width: 100%;
+    min-width: 55px; /* Needs more space for 'Wd', 'Nb' */
+    text-align: center;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 3px 1px; /* Slightly less vertical padding */
+    font: inherit;
+    color: inherit;
+    background-color: #fff; /* Ensure background is white */
+}
+
+.ball-select:focus {
+    outline: none;
+    border-color: #005a9c;
+}
+
+/* Responsive layout for the main team sections */
+@media (max-width: 992px) {
+    #player-lists-wrapper {
+        grid-template-columns: 1fr;
+    }
+}
