@@ -1,19 +1,41 @@
+:root {
+    --bg-color: #f4f7f6;
+    --text-color: #333;
+    --primary-color: #005a9c;
+    --primary-text-color: #fff;
+    --surface-color: #fff;
+    --border-color: #ccc;
+    --header-bg-color: #e9ecef;
+    --shadow-color: rgba(0,0,0,0.1);
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --success-bg-color: #d4edda;
+    --success-text-color: #155724;
+    --success-border-color: #c3e6cb;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #121212;
+        --text-color: #e0e0e0;
+        --primary-color: #4a90e2;
+        --surface-color: #1e1e1e;
+        --border-color: #444;
+        --header-bg-color: #2c2c2c;
+        --shadow-color: rgba(0,0,0,0.4);
+        --success-bg-color: #2a3b2e;
+        --success-text-color: #a5d6a7;
+        --success-border-color: #385e3a;
+    }
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #f4f7f6;
-    color: #333;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     line-height: 1.6;
     margin: 0;
     padding: 20px;
-}
-
-header {
-    background: #005a9c;
-    color: #fff;
-    padding: 1rem 0;
-    text-align: center;
-    margin-bottom: 20px;
-    border-radius: 8px;
 }
 
 main {
@@ -23,11 +45,20 @@ main {
     padding: 0 20px;
 }
 
+header {
+    background: var(--primary-color);
+    color: var(--primary-text-color);
+    padding: 1rem 0;
+    text-align: center;
+    margin-bottom: 20px;
+    border-radius: 8px;
+}
+
 .setup-container {
-    background: #fff;
+    background: var(--surface-color);
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px var(--shadow-color);
     margin-bottom: 20px;
 }
 
@@ -45,7 +76,7 @@ main {
     width: 100%;
     padding: 10px;
     box-sizing: border-box;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
 }
 
@@ -53,8 +84,8 @@ button {
     display: block;
     width: 100%;
     padding: 12px;
-    background: #28a745;
-    color: #fff;
+    background: var(--success-color);
+    color: var(--primary-text-color);
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -63,11 +94,11 @@ button {
 }
 
 button:hover {
-    background: #218838;
+    filter: brightness(0.9);
 }
 
 button.danger {
-    background-color: #dc3545;
+    background-color: var(--danger-color);
 }
 button.danger:hover {
     background-color: #c82333;
@@ -90,7 +121,7 @@ button.danger:hover {
 #first-innings-summary {
     /* This container now holds the full scorecards, so it needs less specific styling */
     margin-bottom: 20px;
-    border-bottom: 2px solid #005a9c;
+    border-bottom: 2px solid var(--primary-color);
     padding-bottom: 20px;
 }
 
@@ -110,21 +141,20 @@ button.danger:hover {
 }
 
 #match-summary-container {
-    background: #fff;
+    background: var(--surface-color);
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px var(--shadow-color);
     margin-top: 30px;
-    border-left: 5px solid #28a745;
+    border-left: 5px solid var(--success-color);
 }
 
 #match-summary-container h2 {
     margin-top: 0;
-    border-bottom: none;
 }
 
 #match-summary-container h3 {
-    color: #28a745;
+    color: var(--success-color);
     text-align: center;
     margin-bottom: 20px;
 }
@@ -142,23 +172,23 @@ button.danger:hover {
 
 .man-of-the-match {
     text-align: center;
-    background-color: #d4edda;
-    color: #155724;
+    background-color: var(--success-bg-color);
+    color: var(--success-text-color);
     padding: 15px;
     border-radius: 8px;
     margin: 20px 0;
-    border: 1px solid #c3e6cb;
+    border: 1px solid var(--success-border-color);
 }
 
 .man-of-the-match h4 {
     margin: 0 0 5px 0;
-    color: #155724;
+    color: var(--success-text-color);
 }
 
 .man-of-the-match p { font-weight: bold; margin: 0; }
 
 #match-summary-container h4 {
-    color: #005a9c;
+    color: var(--primary-color);
 }
 
 #match-summary-container p {
@@ -179,10 +209,11 @@ button.danger:hover {
 }
 
 .team-section {
-    background: #fff;
+    background: var(--surface-color);
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px var(--shadow-color);
+    transition: box-shadow 0.3s ease;
 }
 
 .scorecard-box {
@@ -191,11 +222,10 @@ button.danger:hover {
 
 .scorecard-box h3 {
     margin-top: 0;
-    color: #333;
 }
 
 h2 {
-    color: #005a9c;
+    color: var(--primary-color);
     border-bottom: 2px solid #eee;
     padding-bottom: 10px;
 }
@@ -209,11 +239,11 @@ table {
 th, td {
     padding: 8px; /* Further reduced padding for a more compact view */
     text-align: left;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-color);
 }
 
 thead {
-    background-color: #e9ecef;
+    background-color: var(--header-bg-color);
 }
 
 th {
@@ -221,7 +251,7 @@ th {
 }
 
 tfoot {
-    background-color: #e9ecef;
+    background-color: var(--header-bg-color);
     font-weight: bold;
     border-top: 2px solid #ccc;
 }
@@ -257,9 +287,9 @@ tfoot {
 .player-name-input {
     width: 100%;
     box-sizing: border-box;
-    border: 1px solid #ccc; /* Make it look like a standard input */
+    border: 1px solid var(--border-color); /* Make it look like a standard input */
     border-radius: 4px;
-    background-color: #fff;
+    background-color: var(--surface-color);
     padding: 5px;
     margin: 0;
     font: inherit; /* Uses the table's font styles */
@@ -268,8 +298,8 @@ tfoot {
 
 .player-name-input:focus {
     outline: none;
-    border: 1px solid #005a9c;
-    background-color: #f8f9fa; /* Keep the focus style */
+    border: 1px solid var(--primary-color);
+    background-color: var(--bg-color); /* Keep the focus style */
 }
 
 .bowler-select {
@@ -280,12 +310,12 @@ tfoot {
     box-sizing: border-box;
     font: inherit;
     color: inherit;
-    background-color: #fff;
+    background-color: var(--surface-color);
 }
 
 .bowler-select:focus {
     outline: none;
-    border-color: #005a9c;
+    border-color: var(--primary-color);
 }
 
 /* Style for the individual ball select dropdowns */
@@ -294,22 +324,28 @@ tfoot {
     min-width: 55px; /* Needs more space for 'Wd', 'Nb' */
     text-align: center;
     box-sizing: border-box;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 3px 1px; /* Slightly less vertical padding */
     font: inherit;
     color: inherit;
-    background-color: #fff; /* Ensure background is white */
+    background-color: var(--surface-color); /* Ensure background is white */
 }
 
 .ball-select:focus {
     outline: none;
-    border-color: #005a9c;
+    border-color: var(--primary-color);
 }
 
 /* Responsive layout for the main team sections */
 @media (max-width: 992px) {
     #player-lists-wrapper {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
     }
 }
