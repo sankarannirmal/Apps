@@ -72,7 +72,10 @@ document.getElementById('start-second-innings-btn').addEventListener('click', fu
 
     // Capture score and create a static HTML copy of the first innings scorecard
     const firstInningsRuns = scorecardsWrapper.querySelector('#bowling-grand-total').textContent;
-    matchSettings.targetScore = parseInt(firstInningsRuns, 10) + 1;
+    const firstInningsWickets = scorecardsWrapper.querySelector('#bowling-total-wickets').textContent;
+    matchSettings.firstInningsScore = parseInt(firstInningsRuns, 10);
+    matchSettings.firstInningsWickets = parseInt(firstInningsWickets, 10);
+    matchSettings.targetScore = matchSettings.firstInningsScore + 1;
     let firstInningsHTML = scorecardsWrapper.innerHTML;
 
     // **CRITICAL FIX**: Sanitize the copied HTML to remove all 'id' and 'name' attributes, preventing conflicts.
@@ -676,6 +679,7 @@ function checkInningsEnd() {
         document.querySelectorAll('#scorecards-wrapper select, #scorecards-wrapper input').forEach(el => el.disabled = true);
         alert('Match End!');
         generateMatchSummary();
+        document.getElementById('post-match-actions').classList.remove('hidden');
         currentInningsNumber = 0; // Reset for a new match
     }
 }
@@ -733,11 +737,20 @@ function generateMatchSummary() {
     const topScorerB = findTopScorer(battingStats.filter(p => teamBPlayers.includes(p.name)));
     const bestBowlerB = findBestBowler(bowlingStats.filter(p => teamBPlayers.includes(p.name)));
     
-    // 4. Populate the summary container
+    // 4. Construct score text
+    const firstInningsScoreText = `${defendingTeamName}: ${matchSettings.firstInningsScore}/${matchSettings.firstInningsWickets}`;
+    const secondInningsScoreText = `${chasingTeamName}: ${secondInningsRuns}/${secondInningsWickets}`;
+
+    // 5. Populate the summary container
     const summaryContainer = document.getElementById('match-summary-container');
     summaryContainer.innerHTML = `
         <h2>Match Summary</h2>
         <h3>${resultText}</h3>
+        <div class="final-scores">
+            <p>${firstInningsScoreText}</p>
+            <p>${secondInningsScoreText}</p>
+        </div>
+        <hr>
         <h4>Team A Top Performers</h4>
         <p><strong>Best Batsman:</strong> ${topScorerA.name} (${topScorerA.runs} runs)</p>
         <p><strong>Best Bowler:</strong> ${bestBowlerA.name} (${bestBowlerA.wickets} wickets @ ${bestBowlerA.economy.toFixed(2)} econ)</p>
@@ -826,3 +839,11 @@ function findBestBowler(bowlingStats) {
 
     return bowlingStats[0];
 }
+
+// Add new event listeners for post-match actions
+document.getElementById('reset-btn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to reset all data and start a new match?')) {
+        // The simplest and most effective way to reset the state is to reload the page.
+        window.location.reload();
+    }
+});

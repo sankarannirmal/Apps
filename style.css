@@ -66,6 +66,13 @@ button:hover {
     background: #218838;
 }
 
+button.danger {
+    background-color: #dc3545;
+}
+button.danger:hover {
+    background-color: #c82333;
+}
+
 .hidden {
     display: none;
 }
@@ -120,6 +127,17 @@ button:hover {
     color: #28a745;
     text-align: center;
     margin-bottom: 20px;
+}
+
+#post-match-actions {
+    max-width: 300px; /* Centered container for a single button */
+    margin: 30px auto 0;
+}
+
+.final-scores {
+    text-align: center;
+    margin: 20px 0;
+    font-size: 1.2em;
 }
 
 #match-summary-container h4 {
