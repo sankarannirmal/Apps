@@ -2,6 +2,11 @@
 let matchSettings = {};
 let currentInningsNumber = 0;
 
+// Run loadState() when the script is first loaded to check for a saved game.
+document.addEventListener('DOMContentLoaded', () => {
+    loadState();
+});
+
 // Add a single, persistent event listener to the scorecards wrapper
 document.getElementById('scorecards-wrapper').addEventListener('change', handleMatchEvent);
 
@@ -23,6 +28,7 @@ document.getElementById('match-setup-form').addEventListener('submit', function(
     
     // 2. Show the "Start Match" button and hide old scorecards
     document.getElementById('start-match-container').classList.remove('hidden');
+    document.getElementById('match-setup-form').parentElement.classList.add('hidden'); // Hide setup form
     document.getElementById('scorecards-wrapper').classList.add('hidden');
 });
 
@@ -49,6 +55,7 @@ document.getElementById('start-match-btn').addEventListener('click', function() 
     // Hide the setup buttons
     document.getElementById('start-match-container').classList.add('hidden');
     document.getElementById('player-lists-wrapper').classList.add('hidden');
+    saveState(); // Save state after starting the match
 });
 
 document.getElementById('start-second-innings-btn').addEventListener('click', function() {
@@ -103,6 +110,7 @@ document.getElementById('start-second-innings-btn').addEventListener('click', fu
 
     // Start the new innings in the now-empty scorecardsWrapper
     startInnings(secondInningsBattingTeam, secondInningsBowlingTeam, battingTeamPlayers, bowlingTeamPlayers, matchSettings.numOvers);
+    saveState(); // Save state after starting the second innings
 });
 
 function startInnings(battingTeamName, bowlingTeamName, battingTeamPlayers, bowlingTeamPlayers, numOvers) {
@@ -400,6 +408,7 @@ function handleMatchEvent(e) {
         updateBattingStats(value);
         handleStrikeRotation(value, selectElement);
         updateBattingTeamTotal(); // Update team total after every ball
+        saveState(); // Save state after every ball event
         checkInningsEnd();
     } else if (e.target.classList.contains('batsman-select')) {
         // When a batsman is selected from a dropdown, update other dropdowns and enable the radio.
@@ -680,6 +689,7 @@ function checkInningsEnd() {
         alert('Match End!');
         generateMatchSummary();
         document.getElementById('post-match-actions').classList.remove('hidden');
+        saveState(); // Save the final state
         currentInningsNumber = 0; // Reset for a new match
     }
 }
@@ -736,6 +746,7 @@ function generateMatchSummary() {
     const bestBowlerA = findBestBowler(bowlingStats.filter(p => teamAPlayers.includes(p.name)));
     const topScorerB = findTopScorer(battingStats.filter(p => teamBPlayers.includes(p.name)));
     const bestBowlerB = findBestBowler(bowlingStats.filter(p => teamBPlayers.includes(p.name)));
+    const manOfTheMatch = findManOfTheMatch(battingStats, bowlingStats);
     
     // 4. Construct score text
     const firstInningsScoreText = `${defendingTeamName}: ${matchSettings.firstInningsScore}/${matchSettings.firstInningsWickets}`;
@@ -746,18 +757,22 @@ function generateMatchSummary() {
     summaryContainer.innerHTML = `
         <h2>Match Summary</h2>
         <h3>${resultText}</h3>
+        <div class="man-of-the-match">
+            <h4>Man of the Match</h4>
+            <p>${manOfTheMatch.name}</p>
+        </div>
         <div class="final-scores">
             <p>${firstInningsScoreText}</p>
             <p>${secondInningsScoreText}</p>
         </div>
         <hr>
         <h4>Team A Top Performers</h4>
-        <p><strong>Best Batsman:</strong> ${topScorerA.name} (${topScorerA.runs} runs)</p>
-        <p><strong>Best Bowler:</strong> ${bestBowlerA.name} (${bestBowlerA.wickets} wickets @ ${bestBowlerA.economy.toFixed(2)} econ)</p>
+        <p><strong>Best Batsman:</strong> ${topScorerA.name} - ${topScorerA.runs} (4s: ${topScorerA.fours}, 6s: ${topScorerA.sixes}, SR: ${topScorerA.sr})</p>
+        <p><strong>Best Bowler:</strong> ${bestBowlerA.name} - ${bestBowlerA.wickets}/${bestBowlerA.runs} (ER: ${bestBowlerA.economy.toFixed(2)})</p>
         <hr>
         <h4>Team B Top Performers</h4>
-        <p><strong>Best Batsman:</strong> ${topScorerB.name} (${topScorerB.runs} runs)</p>
-        <p><strong>Best Bowler:</strong> ${bestBowlerB.name} (${bestBowlerB.wickets} wickets @ ${bestBowlerB.economy.toFixed(2)} econ)</p>
+        <p><strong>Best Batsman:</strong> ${topScorerB.name} - ${topScorerB.runs} (4s: ${topScorerB.fours}, 6s: ${topScorerB.sixes}, SR: ${topScorerB.sr})</p>
+        <p><strong>Best Bowler:</strong> ${bestBowlerB.name} - ${bestBowlerB.wickets}/${bestBowlerB.runs} (ER: ${bestBowlerB.economy.toFixed(2)})</p>
     `;
     summaryContainer.classList.remove('hidden');
 }
@@ -770,10 +785,15 @@ function collectAllBattingStats() {
         if (select && select.selectedIndex > 0) {
             name = select.options[select.selectedIndex].text;
         }
-        const runs = parseInt(row.querySelector('.batsman-runs').textContent, 10);
 
         if (name) {
-            stats.push({ name, runs });
+            const runs = parseInt(row.querySelector('.batsman-runs').textContent, 10);
+            const balls = parseInt(row.querySelector('.batsman-balls').textContent, 10);
+            const fours = parseInt(row.querySelector('.batsman-fours').textContent, 10);
+            const sixes = parseInt(row.querySelector('.batsman-sixes').textContent, 10);
+            const sr = (balls > 0) ? ((runs / balls) * 100).toFixed(2) : '0.00';
+
+            stats.push({ name, runs, balls, fours, sixes, sr });
         }
     });
     return stats;
@@ -808,8 +828,29 @@ function collectAllBowlingStats() {
     return Object.values(stats); // Convert back to array
 }
 
+function findManOfTheMatch(battingStats, bowlingStats) {
+    const playerPoints = {};
+
+    // Add points for runs (1 point per run)
+    battingStats.forEach(player => {
+        if (!playerPoints[player.name]) playerPoints[player.name] = 0;
+        playerPoints[player.name] += player.runs;
+    });
+
+    // Add points for wickets (20 points per wicket)
+    bowlingStats.forEach(player => {
+        if (!playerPoints[player.name]) playerPoints[player.name] = 0;
+        playerPoints[player.name] += player.wickets * 20;
+    });
+
+    if (Object.keys(playerPoints).length === 0) return { name: 'N/A' };
+
+    const topPerformer = Object.keys(playerPoints).reduce((a, b) => playerPoints[a] > playerPoints[b] ? a : b);
+    return { name: topPerformer };
+}
+
 function findTopScorer(battingStats) {
-    if (battingStats.length === 0) return { name: 'N/A', runs: 0 };
+    if (battingStats.length === 0) return { name: 'N/A', runs: 0, fours: 0, sixes: 0, sr: '0.00' };
     return battingStats.reduce((top, player) => player.runs > top.runs ? player : top, battingStats[0]);
 }
 
@@ -843,7 +884,80 @@ function findBestBowler(bowlingStats) {
 // Add new event listeners for post-match actions
 document.getElementById('reset-btn').addEventListener('click', function() {
     if (confirm('Are you sure you want to reset all data and start a new match?')) {
-        // The simplest and most effective way to reset the state is to reload the page.
+        // Clear saved state and then reload for a fresh start.
+        clearState();
         window.location.reload();
     }
 });
+
+/**
+ * Saves the entire application state to localStorage.
+ */
+function saveState() {
+    const state = {
+        matchSettings: matchSettings,
+        currentInningsNumber: currentInningsNumber,
+        scorecardsWrapperHTML: document.getElementById('scorecards-wrapper').innerHTML,
+        firstInningsSummaryHTML: document.getElementById('first-innings-summary').innerHTML,
+        matchSummaryHTML: document.getElementById('match-summary-container').innerHTML,
+        // Save the visibility state of all major containers
+        visibility: {
+            setup: document.querySelector('.setup-container').classList.contains('hidden'),
+            playerLists: document.getElementById('player-lists-wrapper').classList.contains('hidden'),
+            startMatch: document.getElementById('start-match-container').classList.contains('hidden'),
+            scorecards: document.getElementById('scorecards-wrapper').classList.contains('hidden'),
+            secondInningsBtn: document.getElementById('second-innings-container').classList.contains('hidden'),
+            firstInningsSummary: document.getElementById('first-innings-summary').classList.contains('hidden'),
+            matchSummary: document.getElementById('match-summary-container').classList.contains('hidden'),
+            postMatchActions: document.getElementById('post-match-actions').classList.contains('hidden')
+        }
+    };
+
+    try {
+        localStorage.setItem('cricketMatchState', JSON.stringify(state));
+    } catch (e) {
+        console.error("Could not save state to localStorage:", e);
+    }
+}
+
+/**
+ * Loads the application state from localStorage if it exists.
+ */
+function loadState() {
+    try {
+        const savedStateJSON = localStorage.getItem('cricketMatchState');
+        if (!savedStateJSON) return;
+
+        const savedState = JSON.parse(savedStateJSON);
+
+        // Restore global variables
+        matchSettings = savedState.matchSettings;
+        currentInningsNumber = savedState.currentInningsNumber;
+
+        // Restore HTML content
+        document.getElementById('scorecards-wrapper').innerHTML = savedState.scorecardsWrapperHTML;
+        document.getElementById('first-innings-summary').innerHTML = savedState.firstInningsSummaryHTML;
+        document.getElementById('match-summary-container').innerHTML = savedState.matchSummaryHTML;
+
+        // Restore visibility of all containers
+        document.querySelector('.setup-container').classList.toggle('hidden', savedState.visibility.setup);
+        document.getElementById('player-lists-wrapper').classList.toggle('hidden', savedState.visibility.playerLists);
+        document.getElementById('start-match-container').classList.toggle('hidden', savedState.visibility.startMatch);
+        document.getElementById('scorecards-wrapper').classList.toggle('hidden', savedState.visibility.scorecards);
+        document.getElementById('second-innings-container').classList.toggle('hidden', savedState.visibility.secondInningsBtn);
+        document.getElementById('first-innings-summary').classList.toggle('hidden', savedState.visibility.firstInningsSummary);
+        document.getElementById('match-summary-container').classList.toggle('hidden', savedState.visibility.matchSummary);
+        document.getElementById('post-match-actions').classList.toggle('hidden', savedState.visibility.postMatchActions);
+
+    } catch (e) {
+        console.error("Could not load state from localStorage:", e);
+        clearState(); // Clear corrupted state
+    }
+}
+
+/**
+ * Clears the saved state from localStorage.
+ */
+function clearState() {
+    localStorage.removeItem('cricketMatchState');
+}
