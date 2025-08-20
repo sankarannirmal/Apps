@@ -279,6 +279,11 @@ tfoot {
     min-width: 120px; /* Ensure it doesn't get too small */
 }
 
+.batsman-name-cell {
+    width: 25%; /* Give the batsman select column more space */
+    min-width: 150px; /* Ensure it doesn't get too small */
+}
+
 .ball-cell {
     padding-left: 2px !important;
     padding-right: 2px !important;
@@ -302,18 +307,20 @@ tfoot {
     background-color: var(--bg-color); /* Keep the focus style */
 }
 
-.bowler-select {
+.bowler-select,
+.batsman-select {
     width: 100%;
     padding: 5px;
     border: 1px solid #ccc;
     border-radius: 4px;
     box-sizing: border-box;
-    font: inherit;
+    font: inherit; /* This is the key property */
     color: inherit;
     background-color: var(--surface-color);
 }
 
-.bowler-select:focus {
+.bowler-select:focus,
+.batsman-select:focus {
     outline: none;
     border-color: var(--primary-color);
 }

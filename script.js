@@ -19,11 +19,15 @@ document.getElementById('match-setup-form').addEventListener('submit', function(
         return;
     }
 
+    // Get existing player names before clearing the list to preserve them
+    const existingPlayers = getPlayersFromDOM();
+
     // 1. Generate Player List Tables
     const playerListWrapper = document.getElementById('player-lists-wrapper');
     playerListWrapper.innerHTML = ''; // Clear previous lists
-    generatePlayerListTable(playerListWrapper, 'Team A', numPlayers);
-    generatePlayerListTable(playerListWrapper, 'Team B', numPlayers);
+    // Pass existing names to the generator function
+    generatePlayerListTable(playerListWrapper, 'Team A', numPlayers, existingPlayers['Team A']);
+    generatePlayerListTable(playerListWrapper, 'Team B', numPlayers, existingPlayers['Team B']);
     playerListWrapper.classList.remove('hidden');
     
     // 2. Show the "Start Match" button and hide old scorecards
@@ -147,7 +151,7 @@ function startInnings(battingTeamName, bowlingTeamName, battingTeamPlayers, bowl
     wrapper.classList.remove('hidden');
 }
 
-function generatePlayerListTable(container, teamName, playerCount) {
+function generatePlayerListTable(container, teamName, playerCount, existingNames = []) {
     const teamSection = document.createElement('div');
     teamSection.className = 'team-section'; // Reuse existing class for consistency
     teamSection.id = `player-list-${teamName.replace(' ', '-')}`; // Add a unique ID
@@ -155,9 +159,11 @@ function generatePlayerListTable(container, teamName, playerCount) {
     // Create the inner HTML for the player list table
     let tableRows = '';
     for (let i = 1; i <= playerCount; i++) {
+        // Use the existing name if available, otherwise use a default placeholder
+        const playerName = existingNames[i - 1] || `Player ${i}`;
         tableRows += `
             <tr>
-                <td><input type="text" class="player-name-input" value="Player ${i}" aria-label="${teamName} Player ${i} name"></td>
+                <td><input type="text" class="player-name-input" value="${playerName}" aria-label="${teamName} Player ${i} name"></td>
             </tr>
         `;
     }
@@ -313,6 +319,7 @@ function generateBowlingScorecard(container, overCount, bowlingTeamPlayers) { //
     // Create a row for each over
     for (let i = 1; i <= overCount; i++) {
         const overRow = document.createElement('tr');
+        overRow.id = `over-row-${currentInningsNumber}-${i}`; // Add a unique ID for the over's main row
         
         // Over Number Cell
         const overNumCell = document.createElement('td');
@@ -413,56 +420,74 @@ function handleMatchEvent(e) {
     } else if (e.target.classList.contains('batsman-select')) {
         // When a batsman is selected from a dropdown, update other dropdowns and enable the radio.
         handleBatsmanSelection(e.target);
+    } else if (e.target.classList.contains('bowler-select')) {
+        // Prompt user to select batsmen after selecting the first bowler for the innings.
+        const bowlerRow = e.target.closest('tr');
+        // Check if this is the first row in the bowling table's body.
+        const isFirstOver = bowlerRow && bowlerRow.parentElement.rows[0] === bowlerRow;
+
+        // Scope the query to the active scorecard wrapper to avoid finding batsmen from the 1st innings summary
+        const firstBatsmanSelect = document.querySelector('#scorecards-wrapper .batsman-select');
+        const isAnyBatsmanSelected = firstBatsmanSelect && firstBatsmanSelect.value !== '';
+
+        if (isFirstOver && !isAnyBatsmanSelected) {
+            alert('Bowler selected. Now, please select the two opening batsmen and choose who is on strike.');
+        }
     }
 }
 
 /**
  * Dynamically adds a new ball input cell after the current one.
+ * This now adds a new ROW for the extra ball, instead of a new column.
  * @param {HTMLElement} currentInputElement The input element that triggered the extra ball.
  */
 function addExtraBall(currentInputElement) {
     const currentRow = currentInputElement.closest('tr');
-    const table = currentRow.closest('table');
-    const tbody = table.querySelector('tbody');
+    const tbody = currentRow.closest('tbody');
 
-    // 1. Add the new input cell to the CURRENT row
-    const currentCell = currentInputElement.parentElement;
-    const newCell = document.createElement('td');
-    newCell.classList.add('ball-cell');
-    newCell.appendChild(createBallSelectElement('Extra ball'));
-    currentCell.after(newCell);
+    // 1. Find the main over row.
+    const mainOverRow = currentRow.classList.contains('extra-over-row') 
+        ? document.getElementById(currentRow.dataset.overRow) 
+        : currentRow;
+    const overId = mainOverRow.id;
 
-    // 2. Check if a new column needs to be added to the whole table
-    const currentBallCount = currentRow.querySelectorAll('.ball-select').length;
-    const headerRow = table.querySelector('thead tr');
-    // The number of ball headers is total th's minus 'Over', 'Bowler', 'Runs', 'Wickets', 'Extras'
-    const headerBallCount = headerRow.children.length - 5;
+    // 2. Find the last existing extra row for this over.
+    const allExtraRowsForOver = tbody.querySelectorAll(`tr.extra-over-row[data-over-row="${overId}"]`);
+    const lastExtraRow = allExtraRowsForOver.length > 0 ? allExtraRowsForOver[allExtraRowsForOver.length - 1] : null;
 
-    if (currentBallCount > headerBallCount) {
-        // A new column is needed for the entire table
-        
-        // a. Add new header
-        const allHeaders = headerRow.children;
-        const runsHeader = allHeaders[allHeaders.length - 3]; // Runs is 3rd to last
-        const newTh = document.createElement('th');
-        newTh.textContent = currentBallCount; // The new header number
-        newTh.classList.add('ball-cell');
-        headerRow.insertBefore(newTh, runsHeader);
+    // 3. Count ball cells in the last extra row.
+    const ballCellsInLastRow = lastExtraRow ? lastExtraRow.querySelectorAll('.ball-cell').length : 0;
 
-        // b. Add a cell to all OTHER rows to keep alignment
-        tbody.querySelectorAll('tr').forEach(row => {
-            if (row.querySelectorAll('.ball-select').length < currentBallCount) {
-                const runsCellInRow = row.querySelector('.over-runs');
-                const placeholderCell = document.createElement('td');
-                placeholderCell.classList.add('ball-cell');
-                row.insertBefore(placeholderCell, runsCellInRow);
-            }
-        });
+    // 4. Decide whether to add a new row (if no extra row exists or the last one is full) or a new cell.
+    if (!lastExtraRow || ballCellsInLastRow >= 6) {
+        // --- CREATE A NEW ROW ---
+        // Find the absolute last row for this over (could be main row or an existing extra row)
+        const allRowsForThisOver = [mainOverRow, ...allExtraRowsForOver];
+        const lastRowForThisOver = allRowsForThisOver[allRowsForThisOver.length - 1];
 
-        // c. Update footer colspan
-        const footerCell = table.querySelector('tfoot .total-label');
-        if (footerCell) {
-            footerCell.colSpan += 1;
+        const newRow = document.createElement('tr');
+        newRow.className = 'extra-over-row';
+        newRow.dataset.overRow = overId;
+
+        // The new row starts with one ball cell. The placeholder TD will span the remaining 8 columns.
+        newRow.innerHTML = `
+            <td colspan="2" class="extra-ball-indent"></td>
+            <td class="ball-cell"></td>
+            <td colspan="8"></td>
+        `;
+        newRow.querySelector('.ball-cell').appendChild(createBallSelectElement('Extra ball'));
+        lastRowForThisOver.after(newRow);
+    } else {
+        // --- ADD A CELL TO THE EXISTING LAST EXTRA ROW ---
+        // Correctly select the placeholder TD at the end of the row, not the indent at the start.
+        const placeholderCell = lastExtraRow.querySelector('td[colspan]:last-child');
+        const newBallCell = document.createElement('td');
+        newBallCell.className = 'ball-cell';
+        newBallCell.appendChild(createBallSelectElement('Extra ball'));
+        // Insert the new ball cell *before* the placeholder.
+        lastExtraRow.insertBefore(newBallCell, placeholderCell);
+        if (placeholderCell) {
+            placeholderCell.colSpan -= 1;
         }
     }
 }
@@ -474,7 +499,20 @@ function addExtraBall(currentInputElement) {
  */
 function updateBowlingStats(inputElement) {
     const row = inputElement.closest('tr');
-    const ballSelects = row.querySelectorAll('.ball-select');
+    const table = row.closest('table');
+
+    // Find the main row for this over to update its totals.
+    const mainOverRow = row.classList.contains('extra-over-row')
+        ? document.getElementById(row.dataset.overRow)
+        : row;
+    const overId = mainOverRow.id;
+
+    // Get all ball selects for this over, across all its rows.
+    const allRowsForOver = [mainOverRow, ...table.querySelectorAll(`tr[data-over-row="${overId}"]`)];
+    const ballSelects = [];
+    allRowsForOver.forEach(r => {
+        ballSelects.push(...r.querySelectorAll('.ball-select'));
+    });
     
     // 1. Calculate row-wise total (runs in the over)
     let overTotal = 0;
@@ -494,12 +532,12 @@ function updateBowlingStats(inputElement) {
             overTotal += parseInt(value, 10) || 0;
         }
     });
-    row.querySelector('.over-runs').textContent = overTotal;
-    row.querySelector('.over-wickets').textContent = overWickets;
-    row.querySelector('.over-extras').textContent = overExtras;
+    // Write the totals to the MAIN over row.
+    mainOverRow.querySelector('.over-runs').textContent = overTotal;
+    mainOverRow.querySelector('.over-wickets').textContent = overWickets;
+    mainOverRow.querySelector('.over-extras').textContent = overExtras;
 
     // 2. Calculate "column-wise" total (the grand total for the innings)
-    const table = row.closest('table');
     const allOverRuns = table.querySelectorAll('.over-runs');
     let grandTotal = 0;
     allOverRuns.forEach(cell => {
@@ -610,7 +648,10 @@ function handleBatsmanSelection(changedSelect) {
     allSelects.forEach(select => {
         if (select !== changedSelect) {
             Array.from(select.options).forEach(option => {
-                option.hidden = allSelectedPlayers.includes(option.value);
+                // Hide an option if it's selected in another dropdown,
+                // but DON'T hide it if it's the currently selected value of THIS dropdown.
+                // This prevents the non-striker's selection from being visually cleared when a new batsman is chosen.
+                option.hidden = allSelectedPlayers.includes(option.value) && select.value !== option.value;
             });
         }
     });
@@ -630,7 +671,21 @@ function handleStrikeRotation(ballValue, selectElement) {
 
     // 2. Rotate for end of over
     const overRow = selectElement.closest('tr');
-    const ballSelects = overRow.querySelectorAll('.ball-select');
+    const table = overRow.closest('table');
+    
+    // Find the main row for this over.
+    const mainOverRow = overRow.classList.contains('extra-over-row')
+        ? document.getElementById(overRow.dataset.overRow)
+        : overRow;
+    const overId = mainOverRow.id;
+
+    // Get all ball selects for this over, across all its rows.
+    const allRowsForOver = [mainOverRow, ...table.querySelectorAll(`tr[data-over-row="${overId}"]`)];
+    const ballSelects = [];
+    allRowsForOver.forEach(r => {
+        ballSelects.push(...r.querySelectorAll('.ball-select'));
+    });
+
     let legalDeliveries = 0;
     ballSelects.forEach(select => {
         const value = select.value;
@@ -882,12 +937,41 @@ function findBestBowler(bowlingStats) {
 }
 
 // Add new event listeners for post-match actions
-document.getElementById('reset-btn').addEventListener('click', function() {
-    if (confirm('Are you sure you want to reset all data and start a new match?')) {
-        // Clear saved state and then reload for a fresh start.
-        clearState();
-        window.location.reload();
-    }
+document.getElementById('restart-match-btn').addEventListener('click', function() {
+    // This function resets the UI to the setup screen, preserving key settings.
+
+    // 1. Store the settings we want to keep from the completed match
+    const playersToKeep = matchSettings.numPlayers;
+    const oversToKeep = matchSettings.numOvers;
+
+    // 2. Hide all in-game and post-game sections
+    document.getElementById('first-innings-summary').classList.add('hidden');
+    document.getElementById('scorecards-wrapper').classList.add('hidden');
+    document.getElementById('second-innings-container').classList.add('hidden');
+    document.getElementById('match-summary-container').classList.add('hidden');
+    document.getElementById('post-match-actions').classList.add('hidden');
+    document.getElementById('start-match-container').classList.add('hidden');
+    document.getElementById('player-lists-wrapper').classList.add('hidden'); // Also hide player lists
+
+    // 3. Show the initial setup form again
+    document.querySelector('.setup-container').classList.remove('hidden');
+
+    // 4. Restore the saved settings to the form inputs
+    document.getElementById('num-players').value = playersToKeep || '';
+    document.getElementById('num-overs').value = oversToKeep || '';
+
+    // 5. Clear the dynamic content from the completed match
+    document.getElementById('scorecards-wrapper').innerHTML = '';
+    document.getElementById('first-innings-summary').innerHTML = '';
+    document.getElementById('match-summary-container').innerHTML = '';
+
+    // 6. Reset global state variables and clear localStorage for a fresh start
+    matchSettings = {};
+    currentInningsNumber = 0;
+    clearState();
+
+    // 7. Scroll to the top of the page to show the setup form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
 /**
