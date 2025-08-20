@@ -36,6 +36,7 @@ body {
     line-height: 1.6;
     margin: 0;
     padding: 20px;
+    zoom: 0.7; /* Note: zoom is a non-standard property */
 }
 
 main {
@@ -52,6 +53,20 @@ header {
     text-align: center;
     margin-bottom: 20px;
     border-radius: 8px;
+    position: relative; /* Needed for positioning the child button */
+}
+
+.header-btn {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    width: auto;
+    padding: 8px 16px;
+    font-size: 14px;
+    background-color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .setup-container {
@@ -275,8 +290,8 @@ tfoot {
     height: 18px;
 }
 .bowler-column {
-    width: 25%; /* Give the bowler column more space */
-    min-width: 120px; /* Ensure it doesn't get too small */
+    width: 20%; /* Give the bowler column a bit less space */
+    min-width: 110px; /* Ensure it doesn't get too small */
 }
 
 .batsman-name-cell {
@@ -285,8 +300,9 @@ tfoot {
 }
 
 .ball-cell {
-    padding-left: 2px !important;
-    padding-right: 2px !important;
+    padding: 2px !important; /* Remove padding to let the container fill it */
+    vertical-align: middle;
+    width: 8%; /* Give a bit more space to ball cells */
 }
 
 .player-name-input {
@@ -328,13 +344,15 @@ tfoot {
 /* Style for the individual ball select dropdowns */
 .ball-select {
     width: 100%;
-    min-width: 55px; /* Needs more space for 'Wd', 'Nb' */
+    min-width: 55px; /* A more compact size */
     text-align: center;
     box-sizing: border-box;
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    padding: 3px 1px; /* Slightly less vertical padding */
+    padding: 4px 2px;
+    height: 38px; /* Set a standard, smaller height */
     font: inherit;
+    font-size: 1em;
     color: inherit;
     background-color: var(--surface-color); /* Ensure background is white */
 }
@@ -342,6 +360,40 @@ tfoot {
 .ball-select:focus {
     outline: none;
     border-color: var(--primary-color);
+}
+
+/* === Split Ball View Styles === */
+.split-ball-container {
+    display: flex;
+    align-items: stretch; /* Make children fill height */
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    height: 100%;
+    min-height: 38px; /* Match the height of the standard ball select */
+    box-sizing: border-box;
+}
+
+.split-ball-event {
+    flex: 1; /* Each half takes up 50% of the space */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: var(--danger-color);
+    border-right: 1px solid var(--border-color);
+    padding: 0 4px;
+}
+
+.runs-on-extra-select {
+    flex: 1; /* Each half takes up 50% of the space */
+    border: none;
+    background: transparent;
+    width: 100%;
+    padding: 4px 2px;
+    font: inherit;
+    color: inherit;
+    background-color: var(--surface-color);
+    text-align: center;
 }
 
 /* Responsive layout for the main team sections */

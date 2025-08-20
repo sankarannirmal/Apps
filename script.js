@@ -5,10 +5,18 @@ let currentInningsNumber = 0;
 // Run loadState() when the script is first loaded to check for a saved game.
 document.addEventListener('DOMContentLoaded', () => {
     loadState();
+    // Attach all primary event listeners once.
+    document.getElementById('force-restart-btn').addEventListener('click', () => {
+        if (confirm('Are you sure you want to start a new match? All current progress will be lost.')) {
+            restartMatch();
+        }
+    });
+    document.getElementById('restart-match-btn').addEventListener('click', restartMatch);
+
+    // Add a single, persistent event listener to the scorecards wrapper
+    document.getElementById('scorecards-wrapper').addEventListener('change', handleMatchEvent);
 });
 
-// Add a single, persistent event listener to the scorecards wrapper
-document.getElementById('scorecards-wrapper').addEventListener('change', handleMatchEvent);
 
 document.getElementById('match-setup-form').addEventListener('submit', function(event) {
     event.preventDefault();
@@ -60,6 +68,7 @@ document.getElementById('start-match-btn').addEventListener('click', function() 
     document.getElementById('start-match-container').classList.add('hidden');
     document.getElementById('player-lists-wrapper').classList.add('hidden');
     saveState(); // Save state after starting the match
+
 });
 
 document.getElementById('start-second-innings-btn').addEventListener('click', function() {
@@ -129,7 +138,7 @@ function startInnings(battingTeamName, bowlingTeamName, battingTeamPlayers, bowl
         <div class="scorecard-box" id="bowling-card-container"></div>
     `;
     wrapper.appendChild(bowlingSection);
-    generateBowlingScorecard(document.getElementById('bowling-card-container'), numOvers, bowlingTeamPlayers); // Pass updated names
+    generateBowlingScorecard(document.getElementById('bowling-card-container'), numOvers, bowlingTeamPlayers);
 
     const battingSection = document.createElement('div');
     battingSection.className = 'team-section';
@@ -148,7 +157,9 @@ function startInnings(battingTeamName, bowlingTeamName, battingTeamPlayers, bowl
         bowlingSection.prepend(targetEl);
     }
 
+    // Show the main scorecards and the new live scoring section
     wrapper.classList.remove('hidden');
+    document.getElementById('force-restart-btn').classList.remove('hidden');
 }
 
 function generatePlayerListTable(container, teamName, playerCount, existingNames = []) {
@@ -275,26 +286,6 @@ function addNewBatsmanRow(tbody, allPlayers) {
     `;
 }
 
-/**
- * Creates a standardized <select> element for ball-by-ball entries.
- * @param {string} ariaLabel The accessibility label for the select element.
- * @returns {HTMLSelectElement} The created select element.
- */
-function createBallSelectElement(ariaLabel) {
-    const select = document.createElement('select');
-    select.className = 'ball-select';
-    select.setAttribute('aria-label', ariaLabel);
-
-    const options = ['', '0', '1', '2', '3', '4', '5', '6', 'Wd', 'Nb', 'W'];
-    options.forEach(opt => {
-        const option = document.createElement('option');
-        option.value = opt;
-        option.textContent = opt;
-        select.appendChild(option);
-    });
-    return select;
-}
-
 function generateBowlingScorecard(container, overCount, bowlingTeamPlayers) { // Added bowlingTeamPlayers parameter
     container.innerHTML = ''; // Clear previous table
 
@@ -395,39 +386,117 @@ function generateBowlingScorecard(container, overCount, bowlingTeamPlayers) { //
 }
 
 /**
+ * Creates a standardized <select> element for ball-by-ball entries.
+ * @param {string} ariaLabel The accessibility label for the select element.
+ * @returns {HTMLSelectElement} The created select element.
+ */
+function createBallSelectElement(ariaLabel) {
+    const select = document.createElement('select');
+    select.className = 'ball-select';
+    select.setAttribute('aria-label', ariaLabel);
+
+    const options = ['', '0', '1', '2', '3', '4', '5', '6', 'Wd', 'Nb', 'W'];
+    options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt;
+        select.appendChild(option);
+    });
+    return select;
+}
+
+/**
+ * Creates a <select> element for entering runs on an extra delivery.
+ * @returns {HTMLSelectElement} The created select element for runs.
+ */
+function createRunsOnExtraSelect() {
+    const select = document.createElement('select');
+    select.className = 'runs-on-extra-select';
+    const options = ['0', '1', '2', '3', '4', '5', '6'];
+    // Add a blank default option to prompt user selection
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '-';
+    select.appendChild(defaultOption);
+
+    options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt;
+        select.appendChild(option);
+    });
+    return select;
+}
+
+/**
+ * Replaces a standard ball cell with the split view for extras.
+ * @param {HTMLTableCellElement} cell The table cell to modify.
+ * @param {string} eventType The type of event ('Wd', 'Nb', 'W').
+ */
+function createSplitBallView(cell, eventType) {
+    if (cell.dataset.isSplit) return; // Prevent this from running twice on the same cell
+
+    cell.dataset.isSplit = 'true';
+    cell.dataset.eventType = eventType;
+    cell.innerHTML = ''; // Clear the old select dropdown
+
+    const container = document.createElement('div');
+    container.className = 'split-ball-container';
+    container.innerHTML = `<span class="split-ball-event">${eventType}</span>`;
+    container.appendChild(createRunsOnExtraSelect());
+    cell.appendChild(container);
+}
+/**
  * Handles all input events on the scorecards using event delegation.
  * @param {Event} e The input event object.
  */
 function handleMatchEvent(e) {
+    const wrapper = document.getElementById('scorecards-wrapper');
     // Check if the input came from a ball-input field
-    if (e.target.classList.contains('ball-select')) {
-        const selectElement = e.target;
-        const value = selectElement.value;
+    const target = e.target;
 
-        // Add extra ball if N/W is entered and it hasn't been added for this input yet
-        if ((value === 'Nb' || value === 'Wd') && !selectElement.dataset.extraAdded) {
-            addExtraBall(selectElement);
-            selectElement.dataset.extraAdded = 'true'; // Mark as having an extra added
+    if (target.classList.contains('ball-select')) {
+        const value = target.value;
+        const cell = target.closest('.ball-cell');
+
+        if (['Nb', 'Wd', 'W'].includes(value)) {
+            // Add extra ball for Nb/Wd BEFORE destroying the original select
+            if ((value === 'Nb' || value === 'Wd') && !target.dataset.extraAdded) {
+                addExtraBall(target);
+                target.dataset.extraAdded = 'true';
+            }
+            createSplitBallView(cell, value);
+            // Update bowling stats immediately to reflect the 1 run for the extra
+            updateBowlingStats(cell.querySelector('.runs-on-extra-select'));
+            saveState(); // Save the split view state
+        } else {
+            // This is a regular delivery (0-6 runs or a simple wicket)
+            updateBowlingStats(target);
+            updateBattingStats(target);
+            handleStrikeRotation(target);
+            updateBattingTeamTotal();
+            saveState();
+            checkInningsEnd();
         }
-
-        // Update both scorecards
-        updateBowlingStats(selectElement);
-        updateBattingStats(value);
-        handleStrikeRotation(value, selectElement);
+    } else if (target.classList.contains('runs-on-extra-select')) {
+        // This is the second part of a split delivery, completing the event
+        updateBowlingStats(target);
+        updateBattingStats(target);
+        handleStrikeRotation(target);
         updateBattingTeamTotal(); // Update team total after every ball
         saveState(); // Save state after every ball event
         checkInningsEnd();
-    } else if (e.target.classList.contains('batsman-select')) {
+    } else if (target.classList.contains('batsman-select')) {
         // When a batsman is selected from a dropdown, update other dropdowns and enable the radio.
-        handleBatsmanSelection(e.target);
-    } else if (e.target.classList.contains('bowler-select')) {
+        handleBatsmanSelection(target);
+    } else if (target.classList.contains('bowler-select')) {
         // Prompt user to select batsmen after selecting the first bowler for the innings.
         const bowlerRow = e.target.closest('tr');
         // Check if this is the first row in the bowling table's body.
         const isFirstOver = bowlerRow && bowlerRow.parentElement.rows[0] === bowlerRow;
 
         // Scope the query to the active scorecard wrapper to avoid finding batsmen from the 1st innings summary
-        const firstBatsmanSelect = document.querySelector('#scorecards-wrapper .batsman-select');
+        const firstBatsmanSelect = wrapper.querySelector('.batsman-select');
         const isAnyBatsmanSelected = firstBatsmanSelect && firstBatsmanSelect.value !== '';
 
         if (isFirstOver && !isAnyBatsmanSelected) {
@@ -492,46 +561,59 @@ function addExtraBall(currentInputElement) {
     }
 }
 
-
 /**
  * Calculates and updates the runs for a specific over (row-wise) and the grand total (column-wise).
  * @param {HTMLElement} inputElement The ball-input element that was changed.
  */
 function updateBowlingStats(inputElement) {
-    const row = inputElement.closest('tr');
-    const table = row.closest('table');
+    const anyChildElement = inputElement;
+    const row = anyChildElement.closest('tr');
+    const table = anyChildElement.closest('table');
 
     // Find the main row for this over to update its totals.
     const mainOverRow = row.classList.contains('extra-over-row')
         ? document.getElementById(row.dataset.overRow)
         : row;
     const overId = mainOverRow.id;
-
-    // Get all ball selects for this over, across all its rows.
+    
+    // Get all ball cells for this over, across all its rows.
     const allRowsForOver = [mainOverRow, ...table.querySelectorAll(`tr[data-over-row="${overId}"]`)];
-    const ballSelects = [];
+    const allBallCells = [];
     allRowsForOver.forEach(r => {
-        ballSelects.push(...r.querySelectorAll('.ball-select'));
+        allBallCells.push(...r.querySelectorAll('.ball-cell'));
     });
     
     // 1. Calculate row-wise total (runs in the over)
     let overTotal = 0;
     let overWickets = 0;
     let overExtras = 0;
-    ballSelects.forEach(select => {
-        const value = select.value;
-        if (value === 'Wd' || value === 'Nb') {
-            // Wides and No Balls count as 1 run for the total
-            overExtras += 1;
-            overTotal += 1;
-        } else if (value === 'W') {
-            // Wickets don't add to the run total but are counted separately
-            overWickets += 1;
+
+    allBallCells.forEach(cell => {
+        if (cell.dataset.isSplit === 'true') {
+            const eventType = cell.dataset.eventType;
+            const runsSelect = cell.querySelector('.runs-on-extra-select');
+            const runs = (runsSelect && runsSelect.value !== '') ? parseInt(runsSelect.value, 10) : 0;
+
+            if (eventType === 'Wd' || eventType === 'Nb') {
+                overExtras += 1;
+                overTotal += 1 + runs; // 1 for the extra, plus byes/overthrows
+            } else if (eventType === 'W') {
+                overWickets += 1;
+                overTotal += runs; // Runs scored on the wicket ball (e.g. run out)
+            }
         } else {
-            // Treat other non-numeric values (like 'Wkt') as 0 runs
-            overTotal += parseInt(value, 10) || 0;
+            const select = cell.querySelector('.ball-select');
+            if (select && select.value) {
+                const value = select.value;
+                if (value === 'Wd' || value === 'Nb' || value === 'W') {
+                    // This case is handled when the view is split. If we are here, it's a simple number.
+                } else {
+                    overTotal += parseInt(value, 10) || 0;
+                }
+            }
         }
     });
+
     // Write the totals to the MAIN over row.
     mainOverRow.querySelector('.over-runs').textContent = overTotal;
     mainOverRow.querySelector('.over-wickets').textContent = overWickets;
@@ -560,53 +642,57 @@ function updateBowlingStats(inputElement) {
     table.querySelector('#bowling-total-extras').textContent = totalExtras;
 }
 
-/**
- * Updates the batting scorecard based on the outcome of a ball.
- * @param {string} ballValue The value from the ball's select dropdown (e.g., '1', '4', 'W', 'Wd').
- */
-function updateBattingStats(ballValue) {
+function updateBattingStats(target) {
     const wrapper = document.getElementById('scorecards-wrapper');
     const onStrikeRadio = wrapper.querySelector('input[name="on-strike"]:checked');
     if (!onStrikeRadio) {
-        // If the event was a wicket, don't alert, as the user needs to select the next batsman.
-        if (ballValue !== 'W') alert('Please select a batsman on strike.');
+        const isWicketEvent = (target.value === 'W' || target.closest('.ball-cell')?.dataset.eventType === 'W');
+        if (!isWicketEvent) alert('Please select a batsman on strike.');
         return;
     }
 
     const batsmanRow = wrapper.querySelector(`#${onStrikeRadio.value}`);
-    const runsScored = parseInt(ballValue) || 0;
-    const isLegalDelivery = ballValue !== 'Wd' && ballValue !== 'Nb';
+    let eventType, runsScored, isLegalDelivery;
+
+    if (target.classList.contains('runs-on-extra-select')) {
+        const cell = target.closest('.ball-cell');
+        eventType = cell.dataset.eventType; // 'W', 'Wd', 'Nb'
+        runsScored = parseInt(target.value, 10) || 0;
+    } else { // .ball-select
+        eventType = target.value; // '0'-'6', 'W', 'Wd', 'Nb'
+        runsScored = parseInt(eventType, 10) || 0;
+    }
+
+    isLegalDelivery = eventType !== 'Wd' && eventType !== 'Nb';
 
     if (isLegalDelivery) {
         // Update Balls Faced
         const ballsCell = batsmanRow.querySelector('.batsman-balls');
         ballsCell.textContent = parseInt(ballsCell.textContent) + 1;
     }
-
-    if (ballValue === 'W') {
+    
+    if (eventType === 'W') {
         const batsmanSelect = batsmanRow.querySelector('.batsman-select');
-
         // Handle Wicket
         batsmanRow.querySelector('.batsman-status').textContent = 'Out';
         onStrikeRadio.disabled = true;
         onStrikeRadio.checked = false;
         batsmanSelect.disabled = true;
-
         // Add a new batsman row if not all out
         const totalWickets = parseInt(wrapper.querySelector('#bowling-total-wickets').textContent);
         const totalPlayers = getPlayersFromDOM()[matchSettings.currentBattingTeam].length;
-
         if (totalWickets < totalPlayers - 1) {
             const tbody = batsmanRow.closest('tbody');
             const allPlayers = getPlayersFromDOM()[matchSettings.currentBattingTeam];
             addNewBatsmanRow(tbody, allPlayers);
             alert('Wicket! Please select the next batsman from the new row.');
         }
-    } else if (ballValue !== 'Wd' && ballValue !== 'Nb') {
-        // Handle Runs (for non-extra balls)
+    }
+    
+    // Add runs to batsman if it's not a Wide. Runs on a No Ball are credited to the batsman.
+    if (eventType !== 'Wd') {
         const runsCell = batsmanRow.querySelector('.batsman-runs');
         runsCell.textContent = parseInt(runsCell.textContent) + runsScored;
-
         if (runsScored === 4) {
             const foursCell = batsmanRow.querySelector('.batsman-fours');
             foursCell.textContent = parseInt(foursCell.textContent) + 1;
@@ -615,7 +701,7 @@ function updateBattingStats(ballValue) {
             sixesCell.textContent = parseInt(sixesCell.textContent) + 1;
         }
     }
-
+    
     // Update Strike Rate for all batsmen
     wrapper.querySelectorAll('.batting-table tbody tr').forEach(row => {
         const runs = parseInt(row.querySelector('.batsman-runs').textContent);
@@ -625,7 +711,58 @@ function updateBattingStats(ballValue) {
             srCell.textContent = ((runs / balls) * 100).toFixed(2);
         }
     });
+}
 
+/**
+ * Handles all strike rotation logic based on the ball just bowled.
+ * @param {HTMLSelectElement} target The element that triggered the event.
+ */
+function handleStrikeRotation(target) {
+    let runsForRotation;
+    let isLegalDeliveryForOverCheck;
+
+    if (target.classList.contains('runs-on-extra-select')) {
+        const cell = target.closest('.ball-cell');
+        const eventType = cell.dataset.eventType;
+        // Only runs on Nb or W count for strike rotation. Wd runs are extras.
+        if (eventType === 'Nb' || eventType === 'W') {
+            runsForRotation = parseInt(target.value, 10) || 0;
+        } else {
+            runsForRotation = 0; // Wides don't rotate strike based on runs
+        }
+        isLegalDeliveryForOverCheck = false;
+    } else { // .ball-select
+        const value = target.value;
+        runsForRotation = parseInt(value, 10) || 0;
+        isLegalDeliveryForOverCheck = (value !== 'Wd' && value !== 'Nb');
+    }
+
+    // 1. Rotate for odd runs
+    if (runsForRotation === 1 || runsForRotation === 3 || runsForRotation === 5) {
+        flipStrike();
+    }
+
+    // 2. Rotate for end of over
+    if (isLegalDeliveryForOverCheck) {
+        const overRow = target.closest('tr');
+        const table = overRow.closest('table');
+        const mainOverRow = overRow.classList.contains('extra-over-row') ? document.getElementById(overRow.dataset.overRow) : overRow;
+        const overId = mainOverRow.id;
+        const allRowsForOver = [mainOverRow, ...table.querySelectorAll(`tr[data-over-row="${overId}"]`)];
+        let legalDeliveries = 0;
+        allRowsForOver.forEach(r => {
+            r.querySelectorAll('.ball-cell').forEach(cell => {
+                if (cell.dataset.isSplit === 'true') {
+                    // This is an extra, so not a legal delivery for this count
+                } else if (cell.querySelector('.ball-select')?.value.match(/^[0-6W]$/)) {
+                    legalDeliveries++;
+                }
+            });
+        });
+        if (legalDeliveries > 0 && legalDeliveries % 6 === 0) {
+            flipStrike();
+        }
+    }
 }
 
 /**
@@ -658,48 +795,6 @@ function handleBatsmanSelection(changedSelect) {
 }
 
 /**
- * Handles all strike rotation logic based on the ball just bowled.
- * @param {string} ballValue The value of the ball (e.g., '1', 'Wd').
- * @param {HTMLSelectElement} selectElement The element that triggered the event.
- */
-function handleStrikeRotation(ballValue, selectElement) {
-    // 1. Rotate for odd runs
-    const runsScored = parseInt(ballValue, 10);
-    if (runsScored === 1 || runsScored === 3 || runsScored === 5) {
-        flipStrike();
-    }
-
-    // 2. Rotate for end of over
-    const overRow = selectElement.closest('tr');
-    const table = overRow.closest('table');
-    
-    // Find the main row for this over.
-    const mainOverRow = overRow.classList.contains('extra-over-row')
-        ? document.getElementById(overRow.dataset.overRow)
-        : overRow;
-    const overId = mainOverRow.id;
-
-    // Get all ball selects for this over, across all its rows.
-    const allRowsForOver = [mainOverRow, ...table.querySelectorAll(`tr[data-over-row="${overId}"]`)];
-    const ballSelects = [];
-    allRowsForOver.forEach(r => {
-        ballSelects.push(...r.querySelectorAll('.ball-select'));
-    });
-
-    let legalDeliveries = 0;
-    ballSelects.forEach(select => {
-        const value = select.value;
-        if (value && value !== 'Wd' && value !== 'Nb') {
-            legalDeliveries++;
-        }
-    });
-
-    if (legalDeliveries > 0 && legalDeliveries % 6 === 0) {
-        flipStrike();
-    }
-}
-
-/**
  * Flips the on-strike radio button between the two active batsmen.
  */
 function flipStrike() {
@@ -718,15 +813,28 @@ function flipStrike() {
 
 function checkInningsEnd() {
     const wrapper = document.getElementById('scorecards-wrapper');
-    const bowlingTable = wrapper.querySelector('#bowling-card-container table');
+    const bowlingTable = wrapper.querySelector('.bowling-table');
     if (!bowlingTable) return;
 
     // Condition 1: All overs bowled
     let legalDeliveries = 0;
-    bowlingTable.querySelectorAll('.ball-select').forEach(select => {
-        const value = select.value;
-        if (value && value !== 'Wd' && value !== 'Nb') {
-            legalDeliveries++;
+    bowlingTable.querySelectorAll('.ball-cell').forEach(cell => {
+        // Check for split-view cells first
+        if (cell.dataset.isSplit === 'true') {
+            // A wicket ('W') is a legal delivery even in a split view. Wd and Nb are not.
+            if (cell.dataset.eventType === 'W') {
+                legalDeliveries++;
+            }
+        } else {
+            // Check for standard dropdowns
+            const select = cell.querySelector('.ball-select');
+            if (select && select.value) {
+                const value = select.value;
+                // A legal delivery is anything that isn't a Wide or No Ball and is not empty.
+                if (value !== 'Wd' && value !== 'Nb' && value !== '') {
+                    legalDeliveries++;
+                }
+            }
         }
     });
     const oversCompleted = Math.floor(legalDeliveries / 6);
@@ -872,11 +980,22 @@ function collectAllBowlingStats() {
         stats[name].runs += parseInt(row.querySelector('.over-runs').textContent, 10);
         stats[name].wickets += parseInt(row.querySelector('.over-wickets').textContent, 10);
 
-        // Count legal balls
-        row.querySelectorAll('.ball-select').forEach(select => {
-            const value = select.value;
-            if (value && value !== 'Wd' && value !== 'Nb') {
-                stats[name].balls++;
+        // Count legal balls from all ball cells in the row
+        row.querySelectorAll('.ball-cell').forEach(cell => {
+            if (cell.dataset.isSplit === 'true') {
+                // A wicket ('W') is a legal delivery even in a split view. Wd and Nb are not.
+                if (cell.dataset.eventType === 'W') {
+                    stats[name].balls++;
+                }
+            } else {
+                const ballSelect = cell.querySelector('.ball-select');
+                if (ballSelect && ballSelect.value) {
+                    const value = ballSelect.value;
+                    // A legal delivery is anything that isn't a Wide or No Ball and is not empty.
+                    if (value !== 'Wd' && value !== 'Nb' && value !== '') {
+                        stats[name].balls++;
+                    }
+                }
             }
         });
     });
@@ -885,22 +1004,54 @@ function collectAllBowlingStats() {
 
 function findManOfTheMatch(battingStats, bowlingStats) {
     const playerPoints = {};
+    
+    // Helper to initialize player points
+    const initPlayer = (name) => {
+        if (!playerPoints[name]) {
+            playerPoints[name] = 0;
+        }
+    };
 
-    // Add points for runs (1 point per run)
+    // 1. Add points for runs and batting milestones
     battingStats.forEach(player => {
-        if (!playerPoints[player.name]) playerPoints[player.name] = 0;
-        playerPoints[player.name] += player.runs;
+        initPlayer(player.name);
+        playerPoints[player.name] += player.runs; // 1 point per run
+
+        // Bonus for 50 or 100
+        if (player.runs >= 100) {
+            playerPoints[player.name] += 30; // Bonus for a century
+        } else if (player.runs >= 50) {
+            playerPoints[player.name] += 15; // Bonus for a half-century
+        }
     });
 
-    // Add points for wickets (20 points per wicket)
+    // 2. Add points for wickets, bowling milestones, and economy rate
     bowlingStats.forEach(player => {
-        if (!playerPoints[player.name]) playerPoints[player.name] = 0;
-        playerPoints[player.name] += player.wickets * 20;
+        initPlayer(player.name);
+        playerPoints[player.name] += player.wickets * 25; // 25 points per wicket
+
+        // Bonus for 3 or 5 wicket hauls
+        if (player.wickets >= 5) {
+            playerPoints[player.name] += 30; // Bonus for 5-wicket haul
+        } else if (player.wickets >= 3) {
+            playerPoints[player.name] += 15; // Bonus for 3-wicket haul
+        }
+
+        // Bonus for economy rate (if they bowled at least 2 overs)
+        if (player.balls >= 12) {
+            const economy = (player.runs / player.balls) * 6;
+            if (economy <= 4.0) {
+                playerPoints[player.name] += 15;
+            } else if (economy <= 6.0) {
+                playerPoints[player.name] += 10;
+            }
+        }
     });
 
     if (Object.keys(playerPoints).length === 0) return { name: 'N/A' };
 
-    const topPerformer = Object.keys(playerPoints).reduce((a, b) => playerPoints[a] > playerPoints[b] ? a : b);
+    // Find the player with the most points
+    const topPerformer = Object.keys(playerPoints).reduce((a, b) => playerPoints[a] > playerPoints[b] ? a : b, Object.keys(playerPoints)[0]);
     return { name: topPerformer };
 }
 
@@ -936,43 +1087,46 @@ function findBestBowler(bowlingStats) {
     return bowlingStats[0];
 }
 
-// Add new event listeners for post-match actions
-document.getElementById('restart-match-btn').addEventListener('click', function() {
-    // This function resets the UI to the setup screen, preserving key settings.
+/**
+ * Resets the entire application to the initial setup screen.
+ * Clears all state and dynamic content.
+ */
+function restartMatch() {
+    // Store settings to repopulate the form for convenience
+    const playersToKeep = matchSettings ? matchSettings.numPlayers : '';
+    const oversToKeep = matchSettings ? matchSettings.numOvers : '';
 
-    // 1. Store the settings we want to keep from the completed match
-    const playersToKeep = matchSettings.numPlayers;
-    const oversToKeep = matchSettings.numOvers;
-
-    // 2. Hide all in-game and post-game sections
+    // Hide all dynamic sections
     document.getElementById('first-innings-summary').classList.add('hidden');
     document.getElementById('scorecards-wrapper').classList.add('hidden');
     document.getElementById('second-innings-container').classList.add('hidden');
     document.getElementById('match-summary-container').classList.add('hidden');
     document.getElementById('post-match-actions').classList.add('hidden');
     document.getElementById('start-match-container').classList.add('hidden');
-    document.getElementById('player-lists-wrapper').classList.add('hidden'); // Also hide player lists
+    document.getElementById('player-lists-wrapper').classList.add('hidden');
+    document.getElementById('force-restart-btn').classList.add('hidden');
 
-    // 3. Show the initial setup form again
+    // Show the initial setup form
     document.querySelector('.setup-container').classList.remove('hidden');
 
-    // 4. Restore the saved settings to the form inputs
+    // Restore the saved settings to the form inputs
     document.getElementById('num-players').value = playersToKeep || '';
     document.getElementById('num-overs').value = oversToKeep || '';
 
-    // 5. Clear the dynamic content from the completed match
+    // Clear the dynamic content from the completed match
     document.getElementById('scorecards-wrapper').innerHTML = '';
     document.getElementById('first-innings-summary').innerHTML = '';
     document.getElementById('match-summary-container').innerHTML = '';
+    document.getElementById('player-lists-wrapper').innerHTML = '';
 
-    // 6. Reset global state variables and clear localStorage for a fresh start
+    // Reset global state variables and clear localStorage for a fresh start
     matchSettings = {};
     currentInningsNumber = 0;
     clearState();
 
     // 7. Scroll to the top of the page to show the setup form
     window.scrollTo({ top: 0, behavior: 'smooth' });
-});
+}
 
 /**
  * Saves the entire application state to localStorage.
@@ -1032,6 +1186,10 @@ function loadState() {
         document.getElementById('first-innings-summary').classList.toggle('hidden', savedState.visibility.firstInningsSummary);
         document.getElementById('match-summary-container').classList.toggle('hidden', savedState.visibility.matchSummary);
         document.getElementById('post-match-actions').classList.toggle('hidden', savedState.visibility.postMatchActions);
+
+        // Also restore the visibility of the "New Match" button
+        const setupIsHidden = savedState.visibility.setup;
+        document.getElementById('force-restart-btn').classList.toggle('hidden', !setupIsHidden);
 
     } catch (e) {
         console.error("Could not load state from localStorage:", e);
