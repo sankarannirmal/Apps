@@ -277,7 +277,12 @@ function addNewBatsmanRow(tbody, allPlayers) {
                 ${playerOptions}
             </select>
         </td>
-        <td class="batsman-status">Not out</td>
+        <td class="batsman-status-cell">
+            <select class="batsman-status-select">
+                <option value="Not out" selected>Not out</option>
+                <option value="Out">Out</option>
+            </select>
+        </td>
         <td class="batsman-runs">0</td>
         <td class="batsman-balls">0</td>
         <td class="batsman-fours">0</td>
@@ -446,6 +451,7 @@ function createSplitBallView(cell, eventType) {
     container.appendChild(createRunsOnExtraSelect());
     cell.appendChild(container);
 }
+
 /**
  * Handles all input events on the scorecards using event delegation.
  * @param {Event} e The input event object.
@@ -459,7 +465,13 @@ function handleMatchEvent(e) {
         const value = target.value;
         const cell = target.closest('.ball-cell');
 
-        if (['Nb', 'Wd', 'W', 'RO'].includes(value)) {
+        if (value === 'RO') {
+            // For a run out, first create the split view to select runs.
+            // The "who is out" part will be handled after runs are selected.
+            createSplitBallView(cell, 'RO');
+            saveState(); // Save the split view state
+            return; // Stop here. The next action is selecting runs.
+        } else if (['Nb', 'Wd', 'W'].includes(value)) {
             // Add extra ball for Nb/Wd BEFORE destroying the original select
             if ((value === 'Nb' || value === 'Wd') && !target.dataset.extraAdded) {
                 addExtraBall(target);
@@ -479,6 +491,42 @@ function handleMatchEvent(e) {
             checkInningsEnd();
         }
     } else if (target.classList.contains('split-ball-runs-select')) {
+        const cell = target.closest('.ball-cell');
+        const eventType = cell.dataset.eventType;
+
+        // If runs are selected for a Run Out, now we ask who was out.
+        if (eventType === 'RO') {
+            const activeRadios = Array.from(wrapper.querySelectorAll('input[name="on-strike"]:not(:disabled)'));
+            const activeBatsmanRows = activeRadios.map(radio => radio.closest('tr'));
+
+            if (activeBatsmanRows.length < 2 || !activeBatsmanRows[0].querySelector('.batsman-select').value || !activeBatsmanRows[1].querySelector('.batsman-select').value) {
+                alert('Error: Cannot process run out. Please select two active batsmen from the batting scorecard first.');
+                target.value = ''; // Reset the runs dropdown
+                return;
+            }
+
+            // Also ensure one of them is on strike, otherwise we don't know who to credit runs to.
+            const onStrikeRadio = wrapper.querySelector('input[name="on-strike"]:checked');
+            if (!onStrikeRadio) {
+                alert('Error: Cannot process run out. Please select which of the active batsmen is on strike first.');
+                target.value = ''; // Reset the runs dropdown
+                return;
+            }
+
+            // Mark the original cell so we can find it when the status is changed.
+            const uniqueCellId = `ro-cell-${Date.now()}`;
+            cell.id = uniqueCellId;
+            wrapper.dataset.runOutCellId = uniqueCellId;
+
+            // Highlight the status cells of the active batsmen
+            activeBatsmanRows.forEach(row => {
+                row.querySelector('.batsman-status-select').classList.add('run-out-candidate');
+            });
+            alert("RUN OUT! Please select 'Out' from the Status column for the batsman who was dismissed.");
+            saveState();
+            return; // Stop processing. The rest of the logic is triggered by handleStatusChange.
+        }
+
         // This is the second part of a split delivery, completing the event
         updateBowlingStats(target);
         updateBattingStats(target);
@@ -489,19 +537,8 @@ function handleMatchEvent(e) {
     } else if (target.classList.contains('batsman-select')) {
         // When a batsman is selected from a dropdown, update other dropdowns and enable the radio.
         handleBatsmanSelection(target);
-    } else if (target.classList.contains('bowler-select')) {
-        // Prompt user to select batsmen after selecting the first bowler for the innings.
-        const bowlerRow = e.target.closest('tr');
-        // Check if this is the first row in the bowling table's body.
-        const isFirstOver = bowlerRow && bowlerRow.parentElement.rows[0] === bowlerRow;
-
-        // Scope the query to the active scorecard wrapper to avoid finding batsmen from the 1st innings summary
-        const firstBatsmanSelect = wrapper.querySelector('.batsman-select');
-        const isAnyBatsmanSelected = firstBatsmanSelect && firstBatsmanSelect.value !== '';
-
-        if (isFirstOver && !isAnyBatsmanSelected) {
-            alert('Bowler selected. Now, please select the two opening batsmen and choose who is on strike.');
-        }
+    } else if (target.classList.contains('batsman-status-select')) {
+        handleStatusChange(target);
     }
 }
 
@@ -631,18 +668,6 @@ function updateBowlingStats(inputElement) {
     });
     table.querySelector('#bowling-grand-total').textContent = grandTotal;
 
-    // Recalculate total wickets for the team by scanning all ball cells.
-    // This ensures Run Outs are counted for the team total but not the bowler's individual over total.
-    const allInningsBallCells = table.querySelectorAll('.ball-cell');
-    let totalWickets = 0;
-    allInningsBallCells.forEach(cell => {
-        if (cell.dataset.isSplit === 'true' && (cell.dataset.eventType === 'W' || cell.dataset.eventType === 'RO')) {
-            totalWickets++;
-        }
-        // A simple 'W' without a split view is not possible with current logic, so this is sufficient.
-    });
-    table.querySelector('#bowling-total-wickets').textContent = totalWickets;
-
     const allOverExtras = table.querySelectorAll('.over-extras');
     let totalExtras = 0;
     allOverExtras.forEach(cell => {
@@ -651,16 +676,81 @@ function updateBowlingStats(inputElement) {
     table.querySelector('#bowling-total-extras').textContent = totalExtras;
 }
 
+/**
+ * Handles the logic when a batsman's status is changed to 'Out'.
+ * This is the central function for all dismissals.
+ * @param {HTMLSelectElement} selectElement The status dropdown that was changed.
+ */
+function handleStatusChange(selectElement) {
+    const row = selectElement.closest('tr');
+    const wrapper = document.getElementById('scorecards-wrapper');
+
+    if (selectElement.value === 'Out') {
+        // Check if this was triggered by a run-out.
+        const runOutCellId = wrapper.dataset.runOutCellId;
+        if (runOutCellId) {
+            const cell = document.getElementById(runOutCellId);
+            if (cell) {
+                // The run-out is confirmed. Now process the stats using the runs
+                // that were selected before the batsman was marked out.
+                const runsSelect = cell.querySelector('.split-ball-runs-select');
+                
+                // Manually call the stat update functions that were skipped earlier.
+                updateBowlingStats(runsSelect);
+                updateBattingStats(runsSelect);
+                handleStrikeRotation(runsSelect);
+
+                cell.id = ''; // remove the temporary id
+            }
+
+            // Clean up the run-out state.
+            delete wrapper.dataset.runOutCellId;
+            wrapper.querySelectorAll('.run-out-candidate').forEach(el => {
+                el.classList.remove('run-out-candidate');
+            });
+        }
+
+        // A batsman has been marked 'Out'.
+        // Now, disable the row controls for the dismissed batsman.
+        const batsmanSelect = row.querySelector('.batsman-select');
+        const radioInRow = row.querySelector('.on-strike-radio');
+
+        selectElement.disabled = true;
+        batsmanSelect.disabled = true;
+        if (radioInRow) {
+            // This is safe to do now because the stats have already been processed for a run out.
+            radioInRow.disabled = true;
+            radioInRow.checked = false;
+        }
+
+        // Update the master wicket count based on all 'Out' batsmen.
+        updateWicketCountAndTotals();
+
+        // Check if we need to add a new batsman.
+        const totalWickets = parseInt(wrapper.querySelector('#bowling-total-wickets').textContent);
+        const totalPlayers = getPlayersFromDOM()[matchSettings.currentBattingTeam].length;
+        if (totalWickets < totalPlayers - 1) {
+            const tbody = row.closest('tbody');
+            const allPlayers = getPlayersFromDOM()[matchSettings.currentBattingTeam];
+            addNewBatsmanRow(tbody, allPlayers);
+            // Only alert for non-runout wickets to avoid alert spam
+            if (!runOutCellId) {
+                alert('Wicket! Please select the next batsman from the new row.');
+            }
+        }
+
+        checkInningsEnd();
+        saveState();
+    }
+    // Note: No logic for changing status back to "Not out" is implemented,
+    // as this would require complex state reversal.
+}
+
 function updateBattingStats(target) {
     const wrapper = document.getElementById('scorecards-wrapper');
     const onStrikeRadio = wrapper.querySelector('input[name="on-strike"]:checked');
-    if (!onStrikeRadio) {
-        const isWicketEvent = (target.value === 'W' || target.closest('.ball-cell')?.dataset.eventType === 'W');
-        if (!isWicketEvent) alert('Please select a batsman on strike.');
-        return;
-    }
+    const onStrikeBatsmanRow = onStrikeRadio ? wrapper.querySelector(`#${onStrikeRadio.value}`) : null;
 
-    const batsmanRow = wrapper.querySelector(`#${onStrikeRadio.value}`);
     let eventType, runsScored, isLegalDelivery;
 
     if (target.classList.contains('split-ball-runs-select')) {
@@ -672,46 +762,45 @@ function updateBattingStats(target) {
         runsScored = parseInt(eventType, 10) || 0;
     }
 
+    // A legal delivery is one that counts towards the 6 balls of an over.
     isLegalDelivery = eventType !== 'Wd' && eventType !== 'Nb';
 
-    if (isLegalDelivery) {
-        // Update Balls Faced
-        const ballsCell = batsmanRow.querySelector('.batsman-balls');
+    // A wicket event requires a batsman on strike to be selected (to know who faced the ball).
+    // An exception is a run out, where the non-striker can be out.
+    if (!onStrikeBatsmanRow && eventType !== 'RO') { // RO dismissal is handled separately
+        alert('Please select a batsman on strike.');
+        return;
+    }
+
+    // 1. Update Balls Faced for the on-strike batsman
+    if (isLegalDelivery && onStrikeBatsmanRow && eventType !== 'W') { // Wicket ball is handled by dismissal
+        const ballsCell = onStrikeBatsmanRow.querySelector('.batsman-balls');
         ballsCell.textContent = parseInt(ballsCell.textContent) + 1;
     }
-    
-    if (eventType === 'W' || eventType === 'RO') {
-        const batsmanSelect = batsmanRow.querySelector('.batsman-select');
-        // Handle Wicket
-        batsmanRow.querySelector('.batsman-status').textContent = 'Out';
-        onStrikeRadio.disabled = true;
-        onStrikeRadio.checked = false;
-        batsmanSelect.disabled = true;
-        // Add a new batsman row if not all out
-        const totalWickets = parseInt(wrapper.querySelector('#bowling-total-wickets').textContent);
-        const totalPlayers = getPlayersFromDOM()[matchSettings.currentBattingTeam].length;
-        if (totalWickets < totalPlayers - 1) {
-            const tbody = batsmanRow.closest('tbody');
-            const allPlayers = getPlayersFromDOM()[matchSettings.currentBattingTeam];
-            addNewBatsmanRow(tbody, allPlayers);
-            alert('Wicket! Please select the next batsman from the new row.');
+
+    // 2. Handle Wickets ('W' only). RO is handled via status change.
+    if (eventType === 'W') {
+        if (onStrikeBatsmanRow) {
+            onStrikeBatsmanRow.querySelector('.batsman-status-select').value = 'Out';
+            onStrikeBatsmanRow.querySelector('.batsman-status-select').dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
-    
-    // Add runs to batsman if it's not a Wide or a Run Out. Runs on a No Ball are credited to the batsman.
-    if (eventType !== 'Wd' && eventType !== 'RO') {
-        const runsCell = batsmanRow.querySelector('.batsman-runs');
+
+    // 3. Add runs to the on-strike batsman's score
+    // Runs from the bat (including on a No Ball or before a Run Out) are credited to the on-strike batsman. Runs from a Wide are not.
+    if (eventType !== 'Wd' && onStrikeBatsmanRow) {
+        const runsCell = onStrikeBatsmanRow.querySelector('.batsman-runs');
         runsCell.textContent = parseInt(runsCell.textContent) + runsScored;
         if (runsScored === 4) {
-            const foursCell = batsmanRow.querySelector('.batsman-fours');
+            const foursCell = onStrikeBatsmanRow.querySelector('.batsman-fours');
             foursCell.textContent = parseInt(foursCell.textContent) + 1;
         } else if (runsScored === 6) {
-            const sixesCell = batsmanRow.querySelector('.batsman-sixes');
+            const sixesCell = onStrikeBatsmanRow.querySelector('.batsman-sixes');
             sixesCell.textContent = parseInt(sixesCell.textContent) + 1;
         }
     }
-    
-    // Update Strike Rate for all batsmen
+
+    // 4. Update Strike Rate for all batsmen
     wrapper.querySelectorAll('.batting-table tbody tr').forEach(row => {
         const runs = parseInt(row.querySelector('.batsman-runs').textContent);
         const balls = parseInt(row.querySelector('.batsman-balls').textContent);
@@ -720,6 +809,24 @@ function updateBattingStats(target) {
             srCell.textContent = ((runs / balls) * 100).toFixed(2);
         }
     });
+}
+
+/**
+ * Counts all batsmen marked 'Out' and updates the total score displays.
+ * This is the single source of truth for the wicket count.
+ */
+function updateWicketCountAndTotals() {
+    const wrapper = document.getElementById('scorecards-wrapper');
+    const battingRows = wrapper.querySelectorAll('.batting-table tbody tr');
+    let wickets = 0;
+    battingRows.forEach(row => {
+        const statusSelect = row.querySelector('.batsman-status-select');
+        if (statusSelect && statusSelect.value === 'Out') {
+            wickets++;
+        }
+    });
+    wrapper.querySelector('#bowling-total-wickets').textContent = wickets;
+    updateBattingTeamTotal(); // This updates the "123/2" display in the batting card
 }
 
 /**
@@ -1082,32 +1189,36 @@ function findManOfTheMatch(battingStats, bowlingStats, winningTeamName) {
 }
 
 function findTopScorer(battingStats) {
-    if (battingStats.length === 0) return { name: 'N/A', runs: 0, fours: 0, sixes: 0, sr: '0.00' };
-    return battingStats.reduce((top, player) => player.runs > top.runs ? player : top, battingStats[0]);
+    if (battingStats.length === 0) return { name: 'N/A', runs: 0, balls: 0, fours: 0, sixes: 0, sr: '0.00' };
+
+    // Sort by runs (desc), then by balls faced (asc) for a better strike rate as a tie-breaker.
+    battingStats.sort((a, b) => {
+        if (a.runs !== b.runs) {
+            return b.runs - a.runs; // Higher runs first
+        }
+        return a.balls - b.balls; // Fewer balls for the same runs is better
+    });
+    return battingStats[0];
 }
 
 function findBestBowler(bowlingStats) {
-    if (bowlingStats.length === 0) return { name: 'N/A', wickets: 0, economy: 0 };
+    if (bowlingStats.length === 0) return { name: 'N/A', wickets: 0, runs: 0, economy: 0.00 };
 
-    // Calculate economy rate for each bowler
+    // Calculate economy rate for each bowler for display purposes
     bowlingStats.forEach(bowler => {
         if (bowler.balls > 0) {
             bowler.economy = (bowler.runs / bowler.balls) * 6;
         } else {
-            bowler.economy = 0;
+            bowler.economy = 0.00;
         }
     });
 
-    // Sort by wickets (desc), then by economy (asc)
+    // Sort by wickets (desc), then by runs conceded (asc) as a tie-breaker.
     bowlingStats.sort((a, b) => {
         if (a.wickets !== b.wickets) {
-            return b.wickets - a.wickets;
+            return b.wickets - a.wickets; // More wickets is better
         }
-        if (a.economy !== b.economy) {
-            return a.economy - b.economy;
-        }
-        // If wickets and economy are the same, sort by runs conceded (asc)
-        return a.runs - b.runs;
+        return a.runs - b.runs; // Fewer runs conceded is better
     });
 
     return bowlingStats[0];

@@ -363,6 +363,15 @@ tfoot {
     border-color: var(--primary-color);
 }
 
+.batsman-status-select {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font: inherit;
+    color: inherit;
+    background-color: var(--surface-color);
+}
 /* === Split Ball View Styles === */
 .split-ball-container {
     display: flex;
@@ -395,6 +404,14 @@ tfoot {
     color: inherit;
     background-color: var(--surface-color);
     text-align: center;
+}
+
+.batsman-status-select.run-out-candidate {
+    background-color: #fff3cd; /* A light yellow, often used for warnings */
+    color: #856404;
+    font-weight: bold;
+    outline: 2px solid var(--danger-color);
+    border-radius: 4px;
 }
 
 /* Responsive layout for the main team sections */
