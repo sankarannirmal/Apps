@@ -395,7 +395,7 @@ function createBallSelectElement(ariaLabel) {
     select.className = 'ball-select';
     select.setAttribute('aria-label', ariaLabel);
 
-    const options = ['', '0', '1', '2', '3', '4', '5', '6', 'Wd', 'Nb', 'W'];
+    const options = ['', '0', '1', '2', '3', '4', '5', '6', 'Wd', 'Nb', 'W', 'RO'];
     options.forEach(opt => {
         const option = document.createElement('option');
         option.value = opt;
@@ -411,7 +411,7 @@ function createBallSelectElement(ariaLabel) {
  */
 function createRunsOnExtraSelect() {
     const select = document.createElement('select');
-    select.className = 'runs-on-extra-select';
+    select.className = 'split-ball-runs-select';
     const options = ['0', '1', '2', '3', '4', '5', '6'];
     // Add a blank default option to prompt user selection
     const defaultOption = document.createElement('option');
@@ -431,7 +431,7 @@ function createRunsOnExtraSelect() {
 /**
  * Replaces a standard ball cell with the split view for extras.
  * @param {HTMLTableCellElement} cell The table cell to modify.
- * @param {string} eventType The type of event ('Wd', 'Nb', 'W').
+ * @param {string} eventType The type of event ('Wd', 'Nb', 'W', 'RO').
  */
 function createSplitBallView(cell, eventType) {
     if (cell.dataset.isSplit) return; // Prevent this from running twice on the same cell
@@ -459,7 +459,7 @@ function handleMatchEvent(e) {
         const value = target.value;
         const cell = target.closest('.ball-cell');
 
-        if (['Nb', 'Wd', 'W'].includes(value)) {
+        if (['Nb', 'Wd', 'W', 'RO'].includes(value)) {
             // Add extra ball for Nb/Wd BEFORE destroying the original select
             if ((value === 'Nb' || value === 'Wd') && !target.dataset.extraAdded) {
                 addExtraBall(target);
@@ -467,7 +467,7 @@ function handleMatchEvent(e) {
             }
             createSplitBallView(cell, value);
             // Update bowling stats immediately to reflect the 1 run for the extra
-            updateBowlingStats(cell.querySelector('.runs-on-extra-select'));
+            updateBowlingStats(cell.querySelector('.split-ball-runs-select'));
             saveState(); // Save the split view state
         } else {
             // This is a regular delivery (0-6 runs or a simple wicket)
@@ -478,7 +478,7 @@ function handleMatchEvent(e) {
             saveState();
             checkInningsEnd();
         }
-    } else if (target.classList.contains('runs-on-extra-select')) {
+    } else if (target.classList.contains('split-ball-runs-select')) {
         // This is the second part of a split delivery, completing the event
         updateBowlingStats(target);
         updateBattingStats(target);
@@ -591,15 +591,19 @@ function updateBowlingStats(inputElement) {
     allBallCells.forEach(cell => {
         if (cell.dataset.isSplit === 'true') {
             const eventType = cell.dataset.eventType;
-            const runsSelect = cell.querySelector('.runs-on-extra-select');
+            const runsSelect = cell.querySelector('.split-ball-runs-select');
             const runs = (runsSelect && runsSelect.value !== '') ? parseInt(runsSelect.value, 10) : 0;
 
             if (eventType === 'Wd' || eventType === 'Nb') {
                 overExtras += 1;
                 overTotal += 1 + runs; // 1 for the extra, plus byes/overthrows
             } else if (eventType === 'W') {
+                // A 'W' (bowled, caught, etc.) counts as a wicket for the bowler.
                 overWickets += 1;
                 overTotal += runs; // Runs scored on the wicket ball (e.g. run out)
+            } else if (eventType === 'RO') {
+                // A 'RO' (run out) adds to the team's wicket total but not the bowler's.
+                overTotal += runs;
             }
         } else {
             const select = cell.querySelector('.ball-select');
@@ -627,10 +631,15 @@ function updateBowlingStats(inputElement) {
     });
     table.querySelector('#bowling-grand-total').textContent = grandTotal;
 
-    const allOverWickets = table.querySelectorAll('.over-wickets');
+    // Recalculate total wickets for the team by scanning all ball cells.
+    // This ensures Run Outs are counted for the team total but not the bowler's individual over total.
+    const allInningsBallCells = table.querySelectorAll('.ball-cell');
     let totalWickets = 0;
-    allOverWickets.forEach(cell => {
-        totalWickets += parseInt(cell.textContent, 10) || 0;
+    allInningsBallCells.forEach(cell => {
+        if (cell.dataset.isSplit === 'true' && (cell.dataset.eventType === 'W' || cell.dataset.eventType === 'RO')) {
+            totalWickets++;
+        }
+        // A simple 'W' without a split view is not possible with current logic, so this is sufficient.
     });
     table.querySelector('#bowling-total-wickets').textContent = totalWickets;
 
@@ -654,9 +663,9 @@ function updateBattingStats(target) {
     const batsmanRow = wrapper.querySelector(`#${onStrikeRadio.value}`);
     let eventType, runsScored, isLegalDelivery;
 
-    if (target.classList.contains('runs-on-extra-select')) {
+    if (target.classList.contains('split-ball-runs-select')) {
         const cell = target.closest('.ball-cell');
-        eventType = cell.dataset.eventType; // 'W', 'Wd', 'Nb'
+        eventType = cell.dataset.eventType; // 'W', 'Wd', 'Nb', 'RO'
         runsScored = parseInt(target.value, 10) || 0;
     } else { // .ball-select
         eventType = target.value; // '0'-'6', 'W', 'Wd', 'Nb'
@@ -671,7 +680,7 @@ function updateBattingStats(target) {
         ballsCell.textContent = parseInt(ballsCell.textContent) + 1;
     }
     
-    if (eventType === 'W') {
+    if (eventType === 'W' || eventType === 'RO') {
         const batsmanSelect = batsmanRow.querySelector('.batsman-select');
         // Handle Wicket
         batsmanRow.querySelector('.batsman-status').textContent = 'Out';
@@ -689,8 +698,8 @@ function updateBattingStats(target) {
         }
     }
     
-    // Add runs to batsman if it's not a Wide. Runs on a No Ball are credited to the batsman.
-    if (eventType !== 'Wd') {
+    // Add runs to batsman if it's not a Wide or a Run Out. Runs on a No Ball are credited to the batsman.
+    if (eventType !== 'Wd' && eventType !== 'RO') {
         const runsCell = batsmanRow.querySelector('.batsman-runs');
         runsCell.textContent = parseInt(runsCell.textContent) + runsScored;
         if (runsScored === 4) {
@@ -721,11 +730,11 @@ function handleStrikeRotation(target) {
     let runsForRotation;
     let isLegalDeliveryForOverCheck;
 
-    if (target.classList.contains('runs-on-extra-select')) {
+    if (target.classList.contains('split-ball-runs-select')) {
         const cell = target.closest('.ball-cell');
         const eventType = cell.dataset.eventType;
-        // Only runs on Nb or W count for strike rotation. Wd runs are extras.
-        if (eventType === 'Nb' || eventType === 'W') {
+        // Runs on Nb, W, or RO count for strike rotation. Wd runs are extras.
+        if (eventType === 'Nb' || eventType === 'W' || eventType === 'RO') {
             runsForRotation = parseInt(target.value, 10) || 0;
         } else {
             runsForRotation = 0; // Wides don't rotate strike based on runs
@@ -821,8 +830,8 @@ function checkInningsEnd() {
     bowlingTable.querySelectorAll('.ball-cell').forEach(cell => {
         // Check for split-view cells first
         if (cell.dataset.isSplit === 'true') {
-            // A wicket ('W') is a legal delivery even in a split view. Wd and Nb are not.
-            if (cell.dataset.eventType === 'W') {
+            // A wicket ('W' or 'RO') is a legal delivery even in a split view. Wd and Nb are not.
+            if (cell.dataset.eventType === 'W' || cell.dataset.eventType === 'RO') {
                 legalDeliveries++;
             }
         } else {
@@ -888,11 +897,13 @@ function generateMatchSummary() {
     const chasingTeamName = (matchSettings.firstInningsBattingTeam === 'Team A') ? 'Team B' : 'Team A';
     const defendingTeamName = matchSettings.firstInningsBattingTeam;
     let resultText = '';
+    let winningTeamName = null; // Add this to store the winner's name
 
     if (secondInningsRuns >= matchSettings.targetScore) {
         // Chasing team won
         const wicketsInHand = matchSettings.numPlayers - 1 - secondInningsWickets;
         resultText = `${chasingTeamName} won by ${wicketsInHand} wickets.`;
+        winningTeamName = chasingTeamName;
     } else if (secondInningsRuns === matchSettings.targetScore - 1) {
         // Match is tied
         resultText = 'Match Tied.';
@@ -900,6 +911,7 @@ function generateMatchSummary() {
         // Defending team won
         const runsMargin = matchSettings.targetScore - 1 - secondInningsRuns;
         resultText = `${defendingTeamName} won by ${runsMargin} runs.`;
+        winningTeamName = defendingTeamName;
     }
 
     // 3. Find top performers for each team
@@ -909,7 +921,7 @@ function generateMatchSummary() {
     const bestBowlerA = findBestBowler(bowlingStats.filter(p => teamAPlayers.includes(p.name)));
     const topScorerB = findTopScorer(battingStats.filter(p => teamBPlayers.includes(p.name)));
     const bestBowlerB = findBestBowler(bowlingStats.filter(p => teamBPlayers.includes(p.name)));
-    const manOfTheMatch = findManOfTheMatch(battingStats, bowlingStats);
+    const manOfTheMatch = findManOfTheMatch(battingStats, bowlingStats, winningTeamName);
     
     // 4. Construct score text
     const firstInningsScoreText = `${defendingTeamName}: ${matchSettings.firstInningsScore}/${matchSettings.firstInningsWickets}`;
@@ -983,8 +995,8 @@ function collectAllBowlingStats() {
         // Count legal balls from all ball cells in the row
         row.querySelectorAll('.ball-cell').forEach(cell => {
             if (cell.dataset.isSplit === 'true') {
-                // A wicket ('W') is a legal delivery even in a split view. Wd and Nb are not.
-                if (cell.dataset.eventType === 'W') {
+                // A wicket ('W' or 'RO') is a legal delivery even in a split view. Wd and Nb are not.
+                if (cell.dataset.eventType === 'W' || cell.dataset.eventType === 'RO') {
                     stats[name].balls++;
                 }
             } else {
@@ -1002,9 +1014,16 @@ function collectAllBowlingStats() {
     return Object.values(stats); // Convert back to array
 }
 
-function findManOfTheMatch(battingStats, bowlingStats) {
+function findManOfTheMatch(battingStats, bowlingStats, winningTeamName) {
     const playerPoints = {};
     
+    // If there's no winner (e.g., a tie), we can't award MOTM from the winning team.
+    if (!winningTeamName) {
+        return { name: 'N/A (Match Tied)' };
+    }
+
+    const winningTeamPlayers = matchSettings.players[winningTeamName];
+
     // Helper to initialize player points
     const initPlayer = (name) => {
         if (!playerPoints[name]) {
@@ -1012,43 +1031,50 @@ function findManOfTheMatch(battingStats, bowlingStats) {
         }
     };
 
-    // 1. Add points for runs and batting milestones
-    battingStats.forEach(player => {
-        initPlayer(player.name);
-        playerPoints[player.name] += player.runs; // 1 point per run
+    // 1. Add points for runs and batting milestones for players from the winning team
+    battingStats
+        .filter(player => winningTeamPlayers.includes(player.name))
+        .forEach(player => {
+            initPlayer(player.name);
+            playerPoints[player.name] += player.runs; // 1 point per run
 
-        // Bonus for 50 or 100
-        if (player.runs >= 100) {
-            playerPoints[player.name] += 30; // Bonus for a century
-        } else if (player.runs >= 50) {
-            playerPoints[player.name] += 15; // Bonus for a half-century
-        }
-    });
-
-    // 2. Add points for wickets, bowling milestones, and economy rate
-    bowlingStats.forEach(player => {
-        initPlayer(player.name);
-        playerPoints[player.name] += player.wickets * 25; // 25 points per wicket
-
-        // Bonus for 3 or 5 wicket hauls
-        if (player.wickets >= 5) {
-            playerPoints[player.name] += 30; // Bonus for 5-wicket haul
-        } else if (player.wickets >= 3) {
-            playerPoints[player.name] += 15; // Bonus for 3-wicket haul
-        }
-
-        // Bonus for economy rate (if they bowled at least 2 overs)
-        if (player.balls >= 12) {
-            const economy = (player.runs / player.balls) * 6;
-            if (economy <= 4.0) {
-                playerPoints[player.name] += 15;
-            } else if (economy <= 6.0) {
-                playerPoints[player.name] += 10;
+            // Bonus for 50 or 100
+            if (player.runs >= 100) {
+                playerPoints[player.name] += 30; // Bonus for a century
+            } else if (player.runs >= 50) {
+                playerPoints[player.name] += 15; // Bonus for a half-century
             }
-        }
-    });
+        });
 
-    if (Object.keys(playerPoints).length === 0) return { name: 'N/A' };
+    // 2. Add points for wickets, bowling milestones, and economy rate for players from the winning team
+    bowlingStats
+        .filter(player => winningTeamPlayers.includes(player.name))
+        .forEach(player => {
+            initPlayer(player.name);
+            playerPoints[player.name] += player.wickets * 25; // 25 points per wicket
+
+            // Bonus for 3 or 5 wicket hauls
+            if (player.wickets >= 5) {
+                playerPoints[player.name] += 30; // Bonus for 5-wicket haul
+            } else if (player.wickets >= 3) {
+                playerPoints[player.name] += 15; // Bonus for 3-wicket haul
+            }
+
+            // Bonus for economy rate (if they bowled at least 2 overs)
+            if (player.balls >= 12) {
+                const economy = (player.runs / player.balls) * 6;
+                if (economy <= 4.0) {
+                    playerPoints[player.name] += 15;
+                } else if (economy <= 6.0) {
+                    playerPoints[player.name] += 10;
+                }
+            }
+        });
+
+    if (Object.keys(playerPoints).length === 0) {
+        // This can happen if the winning team had no scorable actions.
+        return { name: 'N/A' };
+    }
 
     // Find the player with the most points
     const topPerformer = Object.keys(playerPoints).reduce((a, b) => playerPoints[a] > playerPoints[b] ? a : b, Object.keys(playerPoints)[0]);

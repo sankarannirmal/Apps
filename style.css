@@ -117,6 +117,7 @@ button.danger {
 }
 button.danger:hover {
     background-color: #c82333;
+    filter: none; /* Prevents double-darkening from the generic button hover */
 }
 
 .hidden {
@@ -384,7 +385,7 @@ tfoot {
     padding: 0 4px;
 }
 
-.runs-on-extra-select {
+.split-ball-runs-select {
     flex: 1; /* Each half takes up 50% of the space */
     border: none;
     background: transparent;
