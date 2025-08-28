@@ -414,6 +414,24 @@ tfoot {
     border-radius: 4px;
 }
 
+/* Styles for when a wicket is a simple dismissal without runs (e.g., Bowled, Caught) */
+.split-ball-container.wicket-only .split-ball-runs-select {
+    display: none; /* Hide the runs selector */
+}
+
+.split-ball-container.wicket-only .split-ball-event {
+    border-right: none; /* Remove the divider as it's the only visible element */
+}
+
+/* Highlights a form element that requires user input, like selecting the next batsman */
+.needs-selection {
+    background-color: #fff3cd; /* Light yellow warning color */
+    color: #856404; /* Dark text for readability on yellow background */
+    border-color: #ffc107 !important; /* Amber/warning border color, use important to override specificity */
+    outline: 2px solid #ffc107;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+}
+
 /* Responsive layout for the main team sections */
 @media (max-width: 992px) {
     #player-lists-wrapper {

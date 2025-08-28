@@ -417,7 +417,7 @@ function createBallSelectElement(ariaLabel) {
 function createRunsOnExtraSelect() {
     const select = document.createElement('select');
     select.className = 'split-ball-runs-select';
-    const options = ['0', '1', '2', '3', '4', '5', '6'];
+    const options = ['0', '1', '2', '3', '4', '5', '6', 'W'];
     // Add a blank default option to prompt user selection
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
@@ -471,7 +471,7 @@ function handleMatchEvent(e) {
             createSplitBallView(cell, 'RO');
             saveState(); // Save the split view state
             return; // Stop here. The next action is selecting runs.
-        } else if (['Nb', 'Wd', 'W'].includes(value)) {
+        } else if (['Nb', 'Wd'].includes(value)) { // 'W' is now handled as a regular delivery, not a split event.
             // Add extra ball for Nb/Wd BEFORE destroying the original select
             if ((value === 'Nb' || value === 'Wd') && !target.dataset.extraAdded) {
                 addExtraBall(target);
@@ -629,11 +629,16 @@ function updateBowlingStats(inputElement) {
         if (cell.dataset.isSplit === 'true') {
             const eventType = cell.dataset.eventType;
             const runsSelect = cell.querySelector('.split-ball-runs-select');
-            const runs = (runsSelect && runsSelect.value !== '') ? parseInt(runsSelect.value, 10) : 0;
+            const runsValue = runsSelect ? runsSelect.value : '';
+            const isWicket = runsValue === 'W';
+            const runs = isWicket ? 0 : (parseInt(runsValue, 10) || 0);
 
             if (eventType === 'Wd' || eventType === 'Nb') {
                 overExtras += 1;
                 overTotal += 1 + runs; // 1 for the extra, plus byes/overthrows
+                if (isWicket) {
+                    overWickets += 1;
+                }
             } else if (eventType === 'W') {
                 // A 'W' (bowled, caught, etc.) counts as a wicket for the bowler.
                 overWickets += 1;
@@ -646,8 +651,9 @@ function updateBowlingStats(inputElement) {
             const select = cell.querySelector('.ball-select');
             if (select && select.value) {
                 const value = select.value;
-                if (value === 'Wd' || value === 'Nb' || value === 'W') {
-                    // This case is handled when the view is split. If we are here, it's a simple number.
+                if (value === 'W') {
+                    // A 'W' (bowled, caught, etc.) is a wicket for the bowler but adds no runs.
+                    overWickets += 1;
                 } else {
                     overTotal += parseInt(value, 10) || 0;
                 }
@@ -752,13 +758,22 @@ function updateBattingStats(target) {
     const onStrikeBatsmanRow = onStrikeRadio ? wrapper.querySelector(`#${onStrikeRadio.value}`) : null;
 
     let eventType, runsScored, isLegalDelivery;
+    let isWicket = false;
 
     if (target.classList.contains('split-ball-runs-select')) {
         const cell = target.closest('.ball-cell');
         eventType = cell.dataset.eventType; // 'W', 'Wd', 'Nb', 'RO'
-        runsScored = parseInt(target.value, 10) || 0;
+        if (target.value === 'W') {
+            isWicket = true;
+            runsScored = 0;
+        } else {
+            runsScored = parseInt(target.value, 10) || 0;
+        }
     } else { // .ball-select
         eventType = target.value; // '0'-'6', 'W', 'Wd', 'Nb'
+        if (eventType === 'W') {
+            isWicket = true;
+        }
         runsScored = parseInt(eventType, 10) || 0;
     }
 
@@ -768,18 +783,23 @@ function updateBattingStats(target) {
     // A wicket event requires a batsman on strike to be selected (to know who faced the ball).
     // An exception is a run out, where the non-striker can be out.
     if (!onStrikeBatsmanRow && eventType !== 'RO') { // RO dismissal is handled separately
-        alert('Please select a batsman on strike.');
-        return;
+        // Only alert if action requires a striker: scoring runs (not on a wide), facing a legal ball, or getting out.
+        if ((runsScored > 0 && eventType !== 'Wd') || isLegalDelivery || isWicket) {
+            alert('Please select a batsman on strike.');
+            // Reset the dropdown that was just changed to prevent inconsistent state
+            if (target.value) target.value = '';
+            return;
+        }
     }
 
     // 1. Update Balls Faced for the on-strike batsman
-    if (isLegalDelivery && onStrikeBatsmanRow && eventType !== 'W') { // Wicket ball is handled by dismissal
+    if (isLegalDelivery && onStrikeBatsmanRow) {
         const ballsCell = onStrikeBatsmanRow.querySelector('.batsman-balls');
         ballsCell.textContent = parseInt(ballsCell.textContent) + 1;
     }
 
-    // 2. Handle Wickets ('W' only). RO is handled via status change.
-    if (eventType === 'W') {
+    // 2. Handle Wickets. RO is handled via status change.
+    if (isWicket) {
         if (onStrikeBatsmanRow) {
             onStrikeBatsmanRow.querySelector('.batsman-status-select').value = 'Out';
             onStrikeBatsmanRow.querySelector('.batsman-status-select').dispatchEvent(new Event('change', { bubbles: true }));
