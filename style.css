@@ -383,15 +383,23 @@ tfoot {
     box-sizing: border-box;
 }
 
-.split-ball-event {
-    flex: 1; /* Each half takes up 50% of the space */
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.split-ball-event-select {
+    flex: 1;
+    border: none;
+    border-right: 1px solid var(--border-color);
+    background: transparent;
+    width: 100%;
+    padding: 4px 2px;
+    font: inherit;
     font-weight: bold;
     color: var(--danger-color);
-    border-right: 1px solid var(--border-color);
-    padding: 0 4px;
+    background-color: var(--surface-color);
+    text-align: center;
+    /* Minimal appearance to look less like a standard dropdown */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    cursor: pointer;
 }
 
 .split-ball-runs-select {
